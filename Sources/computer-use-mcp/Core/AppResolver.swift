@@ -43,21 +43,28 @@ private final class RunningApplicationsCache: @unchecked Sendable {
     }
 
     private static func scan() -> [NSRunningApplication] {
-        var pids = [pid_t](repeating: 0, count: 8192)
-        // Despite the header's byte-oriented wording, proc_listallpids returns
-        // the number of PIDs written (verified empirically: 786 returned for
-        // 785 processes). Dividing by the pid size here silently dropped 3/4
-        // of all processes and made login-time apps unresolvable.
-        let returned = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
-        guard returned > 0 else { return NSWorkspace.shared.runningApplications }
-        let count = min(Int(returned), pids.count)
-        return pids.prefix(count).compactMap { pid in
-            guard pid > 0, let app = NSRunningApplication(processIdentifier: pid),
+        let pids = allProcessIDs()
+        guard !pids.isEmpty else { return NSWorkspace.shared.runningApplications }
+        return pids.compactMap { pid in
+            guard let app = NSRunningApplication(processIdentifier: pid),
                 app.activationPolicy != .prohibited
             else { return nil }
             return app
         }
     }
+}
+
+/// Every pid on the system, in the kernel's newest-first order. Despite the
+/// header's byte-oriented wording, proc_listallpids returns the number of
+/// pids written (verified empirically: 786 returned for 785 processes), while
+/// the buffer size it takes is in bytes — dividing the return value by the
+/// pid size silently dropped the oldest three quarters of the list and made
+/// login-time apps unresolvable.
+func allProcessIDs() -> [pid_t] {
+    var pids = [pid_t](repeating: 0, count: 8192)
+    let returned = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+    guard returned > 0 else { return [] }
+    return pids.prefix(min(Int(returned), pids.count)).filter { $0 > 0 }
 }
 
 func resolveApp(_ identifier: String) throws -> ResolvedApp {

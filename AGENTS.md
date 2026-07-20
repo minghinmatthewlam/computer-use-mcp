@@ -56,4 +56,33 @@ safety-sensitive even when they look like ordinary Swift edits.
   path and either perform an approved local live verification or explicitly
   report why live verification was not run.
 - Safety-policy changes must include tests for both the gated path and the
-  confirmed/recovery path.
+ confirmed/recovery path.
+
+## Cursor Cloud specific instructions
+
+Cursor Cloud Agent VMs run **Linux (x86_64)**, but this project is **macOS-only**
+(`Package.swift` declares `.macOS(.v14)`; every source target imports Apple
+frameworks — `AppKit`, `ApplicationServices`, `CoreGraphics`, `ScreenCaptureKit`,
+`Vision`, `Carbon`, `IOKit`, `WebKit`, `SwiftUI`). It therefore **cannot be built,
+tested, or run on the Linux Cloud VM.** Hosted CI runs on `macos-15` (see
+`.github/workflows/ci.yml`); full verification requires macOS 14+ with the Swift 6
+toolchain (Xcode 16+).
+
+What is and is not possible on the Linux VM:
+
+- A Swift toolchain (Swift 6.x via `swiftly`, on `PATH` through `~/.profile`) is
+ installed for editing, sourcekit-lsp, and SwiftPM dependency resolution only.
+- `swift package resolve` works — the third-party deps (swift-nio, swift-log,
+ MCP SDK, etc.) are cross-platform and compile fine.
+- `swift build` / `swift test` **fail** on Linux with `no such module 'AppKit'`
+ (fixture target) and `no such module 'CoreGraphics'` (main target). This is
+ expected, not a misconfiguration — do not try to "fix" it by editing imports or
+ platform gates.
+- The live/CLI/demo paths (`serve`, `call`, `doctor`, `scripts/e2e_demo.py`,
+ etc.) need macOS Accessibility/ScreenCaptureKit and cannot run here.
+
+Practical guidance for a Cloud Agent on this repo: you can read, navigate, and
+make source edits with LSP support, but you **cannot compile, test, or run** the
+result on the VM. Any change that needs `swift build`/`swift test`/live
+verification must be verified by the user (or CI) on a macOS host; state this
+explicitly in the PR instead of claiming local verification.

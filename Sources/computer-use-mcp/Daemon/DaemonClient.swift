@@ -6,6 +6,11 @@
 
 import Foundation
 import MCP
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 
 actor DaemonClient {
     static let shared = DaemonClient()
@@ -98,7 +103,11 @@ actor DaemonClient {
     }
 
     private static func connect() -> Int32? {
+        #if os(Linux)
+        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #else
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        #endif
         guard fd >= 0 else { return nil }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
@@ -114,7 +123,11 @@ actor DaemonClient {
         let result = fits
             ? withUnsafePointer(to: &address) { pointer in
                 pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    #if os(Linux)
+                    SwiftGlibc.connect(fd, $0, size)
+                    #else
                     Darwin.connect(fd, $0, size)
+                    #endif
                 }
             } : -1
         guard result == 0 else {

@@ -1,8 +1,10 @@
 // Thin helpers over the C Accessibility (AXUIElement) API.
 
+import Foundation
+#if os(macOS)
 import AppKit
 import ApplicationServices
-import Foundation
+#endif
 
 /// Process-wide AX messaging timeout (seconds). An unresponsive app then
 /// fails each AX call after this bound instead of stalling tool calls for the

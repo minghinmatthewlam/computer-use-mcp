@@ -16,9 +16,11 @@
 // the corrective write, sleeping) is injected — so the logic is unit-tested
 // without a live window. The live wiring lives in Tools/SystemTools.swift.
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import CoreGraphics
-import Foundation
+#endif
 
 enum WindowMotion {
     // MARK: - Tunables

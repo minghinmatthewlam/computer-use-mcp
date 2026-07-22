@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -96,3 +97,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { NSApp.deactivate() }
     }
 }
+#else
+import Foundation
+
+@main
+struct ComputerUseFixtureApp {
+    static func main() {}
+}
+#endif

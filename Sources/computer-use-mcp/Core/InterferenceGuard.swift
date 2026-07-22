@@ -13,9 +13,11 @@
 // delivery (private-source events posted to a pid or window) does not update —
 // the agent cannot trip its own guard.
 
-import CoreGraphics
 import Foundation
 import MCP
+#if os(macOS)
+import CoreGraphics
+#endif
 
 /// Pure yield decision, separated from system state for tests.
 func interferenceShouldYield(

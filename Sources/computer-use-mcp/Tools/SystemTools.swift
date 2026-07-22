@@ -1,10 +1,13 @@
+ #if os(macOS)
 // System-level tools: open_app, open_url, list_windows, manage_window,
 // click_menu_item, and clipboard access.
 
-import AppKit
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import AppKit
+import ApplicationServices
+#endif
 
 // MARK: - open_app
 
@@ -583,3 +586,4 @@ private func elementExists(
     }
     return false
 }
+#endif

@@ -1,8 +1,10 @@
 // Coordinate → element hit-testing, the fallback when a target is not (or is
 // wrongly) represented in the accessibility tree.
 
-import ApplicationServices
 import Foundation
+#if os(macOS)
+import ApplicationServices
+#endif
 
 /// The accessibility element at a global screen point, restricted to the
 /// target app. Returns nil when nothing (or another app's window) is there.

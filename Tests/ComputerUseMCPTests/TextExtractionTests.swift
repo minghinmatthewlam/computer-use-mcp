@@ -1,5 +1,8 @@
-import AppKit
+ #if os(macOS)
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 import Testing
 
 @testable import computer_use_mcp
@@ -126,3 +129,4 @@ import Testing
         #expect(runStyle(from: [:]) == RunStyle())
     }
 }
+#endif

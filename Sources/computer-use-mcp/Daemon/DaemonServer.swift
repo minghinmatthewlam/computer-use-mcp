@@ -7,9 +7,13 @@
 // shared system services, and per-app leases (AppLeases) keep two sessions
 // from interleaving actions inside the same app.
 
-import Darwin
 import Foundation
 import MCP
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 
 private let daemonConnectionLimiter = DaemonConnectionLimiter(maxConnections: DaemonProtocolLimits.maxConcurrentConnections)
 
@@ -84,7 +88,11 @@ func runDaemon() async -> Never {
 private func bindDaemonSocket() -> Int32 {
     let path = daemonSocketPath()
     unlink(path)  // stale socket from a dead daemon; the lock arbitrates liveness
+    #if os(Linux)
+    let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+    #else
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    #endif
     guard fd >= 0 else { fatalError("daemon: socket() failed: \(errno)") }
 
     var address = sockaddr_un()
@@ -111,12 +119,27 @@ private func bindDaemonSocket() -> Int32 {
 }
 
 private func isTrustedPeer(_ fd: Int32) -> Bool {
+    #if os(Linux)
+    var credentials = LinuxPeerCredentials()
+    var length = socklen_t(MemoryLayout<LinuxPeerCredentials>.size)
+    let result = withUnsafeMutablePointer(to: &credentials) { pointer in
+        getsockopt(
+            fd,
+            Int32(SOL_SOCKET),
+            Int32(SO_PEERCRED),
+            pointer,
+            &length
+        )
+    }
+    return result == 0 && credentials.uid == geteuid()
+    #else
     var uid: uid_t = 0
     var gid: gid_t = 0
     guard getpeereid(fd, &uid, &gid) == 0 else {
         return false
     }
     return uid == geteuid()
+    #endif
 }
 
 private func serveConnection(fd: Int32, authToken: String, connectionTasks: DaemonConnectionTasks) {

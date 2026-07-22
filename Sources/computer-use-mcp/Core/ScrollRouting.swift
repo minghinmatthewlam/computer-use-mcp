@@ -6,9 +6,11 @@
 // scrollability, and drive the highest-ranked container (special-casing web
 // areas). Mirrors BCU's ScrollRouteService, tuned to what our trees expose.
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import CoreGraphics
-import Foundation
+#endif
 
 /// Extracted, side-effect-free features of a scroll-container candidate, so the
 /// scoring policy is a pure function separate from the live AX reads.

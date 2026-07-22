@@ -12,10 +12,12 @@
 //   COMPUTER_USE_MCP_CONFIRM_APPS=a,b,c     apps where every action needs confirm
 //   COMPUTER_USE_MCP_DESTRUCTIVE=pat,pat    extra destructive label substrings
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import Carbon.HIToolbox
 import CoreGraphics
-import Foundation
+#endif
 import MCP
 
 struct SafetyError: Error, CustomStringConvertible {

@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct ContentView: View {
@@ -79,3 +80,4 @@ struct ContentView: View {
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.08)))
     }
 }
+#endif

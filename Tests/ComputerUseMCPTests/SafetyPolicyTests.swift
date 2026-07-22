@@ -1,4 +1,6 @@
+#if os(macOS)
 import ApplicationServices
+#endif
 import Foundation
 import Testing
 

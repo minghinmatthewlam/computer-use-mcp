@@ -10,8 +10,10 @@
 // The overlay is purely cosmetic; it never moves the real cursor, and a
 // dead/failed helper never blocks or fails the action.
 
-import CoreGraphics
 import Foundation
+#if os(macOS)
+import CoreGraphics
+#endif
 
 actor AgentCursor {
     static let shared = AgentCursor()

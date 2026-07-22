@@ -1,3 +1,4 @@
+ #if os(macOS)
 // Visible-range and rich-text extraction for read_text.
 //
 // A large text surface (a long article, an editor buffer) can hold far more
@@ -8,9 +9,11 @@
 // and renders the attributed runs to lightweight markdown so links and
 // emphasis survive as text (BCU-style extraction).
 
+import Foundation
+#if os(macOS)
 import AppKit
 import ApplicationServices
-import Foundation
+#endif
 
 enum TextExtraction {
     /// Character count above which read_text auto-switches to the visible-range
@@ -142,8 +145,9 @@ private func linkURL(from attributes: [NSAttributedString.Key: Any]) -> String? 
             let element = ref as! AXUIElement
             if let url = axString(element, kAXURLAttribute), !url.isEmpty { return url }
         }
-        if let url = value as? URL { return url.absoluteString }
-        if let string = value as? String, !string.isEmpty { return string }
+    if let url = value as? URL { return url.absoluteString }
+    if let string = value as? String, !string.isEmpty { return string }
     }
     return nil
 }
+#endif

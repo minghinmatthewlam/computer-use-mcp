@@ -1,11 +1,13 @@
 // Window screenshots via ScreenCaptureKit. Captures a single app window
 // without bringing it to the foreground.
 
-import CoreGraphics
 import Foundation
+#if os(macOS)
+import CoreGraphics
 import ImageIO
 @preconcurrency import ScreenCaptureKit
 import UniformTypeIdentifiers
+#endif
 
 struct WindowCapture {
     let pngData: Data
@@ -37,6 +39,7 @@ enum ScreenshotDetail: Sendable {
     }
 }
 
+#if os(macOS)
 func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: ScreenshotDetail) async throws -> WindowCapture {
     guard CGPreflightScreenCaptureAccess() else {
         throw ToolError.failed(
@@ -59,7 +62,6 @@ func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: Screenshot
         }
     }
 }
-
 /// SCShareableContent enumerates every shareable window in the system through
 /// replayd — the most expensive part of a capture. Within a burst of actions
 /// the window list barely changes, so it is cached briefly; a request the
@@ -237,3 +239,8 @@ private func encodePNG(_ image: CGImage) -> Data? {
     guard CGImageDestinationFinalize(destination) else { return nil }
     return data as Data
 }
+#else
+func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: ScreenshotDetail) async throws -> WindowCapture {
+    throw ToolError.failed("Screenshots are unsupported on Linux.")
+}
+#endif

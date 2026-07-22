@@ -1,9 +1,11 @@
 // Shared target resolution for interaction tools: app + element_id (from the
 // latest snapshot) → live AXUIElement, re-resolved via its locator path.
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 struct ResolvedTarget {
     let app: ResolvedApp

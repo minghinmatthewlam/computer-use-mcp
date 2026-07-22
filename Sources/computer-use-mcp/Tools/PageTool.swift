@@ -1,3 +1,4 @@
+ #if os(macOS)
 // page — CSS-selector-addressed web interaction for browser/webview surfaces.
 //
 // JS-capable hosts (Safari/Chromium and Electron with CDP) get DOM probes and
@@ -5,11 +6,16 @@
 // downgraded when only AX evidence exists: a successful AX echo is not DOM
 // proof.
 
+import Foundation
+#if os(Linux)
+import FoundationNetworking
+#endif
+import MCP
+#if os(macOS)
 import AppKit
 import ApplicationServices
 import CoreGraphics
-import Foundation
-import MCP
+#endif
 
 enum PageAction: String {
     case click
@@ -975,3 +981,4 @@ func jsonString(_ value: String) -> String {
 private func appleScriptString(_ value: String) -> String {
     "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
 }
+#endif

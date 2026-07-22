@@ -1,10 +1,12 @@
 // Shared resolution for pointer tools (click, scroll): turn the tool args into
 // a concrete (AXUIElement, global point, delivery context).
 
-import ApplicationServices
-import CoreGraphics
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+import CoreGraphics
+#endif
 
 struct PointTarget {
     /// The element under the point (hit-tested or resolved from an id), if any.

@@ -1,7 +1,9 @@
-import AppKit
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import AppKit
+import ApplicationServices
+#endif
 
 private let focusTelemetryMetaKey = "computer-use-mcp/focus"
 private let deliveryTelemetryMetaKey = "computer-use-mcp/delivery"

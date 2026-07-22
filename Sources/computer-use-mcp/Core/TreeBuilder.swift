@@ -6,8 +6,10 @@
 // dense-collection viewport windowing, and skeleton depth truncation — are
 // unit-testable against an in-memory tree with no live accessibility API.
 
-import ApplicationServices
 import Foundation
+#if os(macOS)
+import ApplicationServices
+#endif
 
 struct BuiltTree {
     let text: String

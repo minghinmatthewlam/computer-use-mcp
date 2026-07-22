@@ -1,9 +1,11 @@
 // Perception: list_apps and get_app_state, plus the shared fresh-state
 // result that every interaction tool returns after acting.
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 func listAppsImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     .text(runningAppsDescription())

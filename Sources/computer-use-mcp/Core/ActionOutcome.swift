@@ -8,9 +8,11 @@
 //
 // See docs/outcome-contract.md for the design and the per-tool trap matrix.
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 let actionOutcomeMetaKey = "computer-use-mcp/outcome"
 

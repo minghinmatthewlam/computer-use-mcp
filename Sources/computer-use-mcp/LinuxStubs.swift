@@ -169,22 +169,22 @@ func deliverClick(
     at point: CGPoint, button: MouseButtonKind, clickCount: Int, context: DeliveryContext,
     allowGlobalCursor: Bool = false
 ) throws -> DeliveryOutcome {
-    throw ToolError.notImplemented("Mouse click delivery is unsupported on Linux.")
+    throw ToolError.failed("Mouse click delivery is unsupported on Linux.")
 }
 
 @discardableResult
 func deliverScroll(at point: CGPoint, deltaX: Int, deltaY: Int, context: DeliveryContext) throws -> InputTier {
-    throw ToolError.notImplemented("Scroll delivery is unsupported on Linux.")
+    throw ToolError.failed("Scroll delivery is unsupported on Linux.")
 }
 
 @discardableResult
 func deliverDrag(from: CGPoint, to: CGPoint, context: DeliveryContext) async throws -> InputTier {
-    throw ToolError.notImplemented("Drag delivery is unsupported on Linux.")
+    throw ToolError.failed("Drag delivery is unsupported on Linux.")
 }
 
 @discardableResult
 func typeUnicodeText(_ text: String, context: DeliveryContext) throws -> InputTier {
-    throw ToolError.notImplemented("Text input is unsupported on Linux.")
+    throw ToolError.failed("Text input is unsupported on Linux.")
 }
 
 func keyDeliveryMode(context: DeliveryContext, targetAppIsActive: Bool) throws -> KeyDeliveryMode {
@@ -198,7 +198,7 @@ func keyDeliveryMode(context: DeliveryContext, targetAppIsActive: Bool) throws -
 }
 
 func deliverKey(_ chord: KeyChord, context: DeliveryContext, targetAppIsActive: Bool) throws -> KeyDeliveryMode {
-    throw ToolError.notImplemented("Keyboard input is unsupported on Linux.")
+    throw ToolError.failed("Keyboard input is unsupported on Linux.")
 }
 
 func syntheticFallbackReasons(context: DeliveryContext, allowGlobalCursor: Bool) -> [FallbackReason] { [] }
@@ -209,44 +209,44 @@ func unicodeTypingChunks(_ text: String) -> [[UniChar]] {
 }
 
 func openAppImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("App launching is unsupported on Linux.")
+    throw ToolError.failed("App launching is unsupported on Linux.")
 }
 func openURLImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("URL opening is unsupported on Linux.")
+    throw ToolError.failed("URL opening is unsupported on Linux.")
 }
 func listWindowsImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Window enumeration is unsupported on Linux.")
+    throw ToolError.failed("Window enumeration is unsupported on Linux.")
 }
 func manageWindowImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Window management is unsupported on Linux.")
+    throw ToolError.failed("Window management is unsupported on Linux.")
 }
 func clickMenuItemImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Menu interaction is unsupported on Linux.")
+    throw ToolError.failed("Menu interaction is unsupported on Linux.")
 }
 func readClipboardImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Clipboard access is unsupported on Linux.")
+    throw ToolError.failed("Clipboard access is unsupported on Linux.")
 }
 func writeClipboardImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Clipboard access is unsupported on Linux.")
+    throw ToolError.failed("Clipboard access is unsupported on Linux.")
 }
 func clipboardRestoreValue(committed: Bool, previous: String?) -> String? { committed ? nil : previous }
 func waitForImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Waiting for UI conditions is unsupported on Linux.")
+    throw ToolError.failed("Waiting for UI conditions is unsupported on Linux.")
 }
 func typeTextImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Text entry is unsupported on Linux.")
+    throw ToolError.failed("Text entry is unsupported on Linux.")
 }
 func setValueImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Value editing is unsupported on Linux.")
+    throw ToolError.failed("Value editing is unsupported on Linux.")
 }
 func selectTextImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Text selection is unsupported on Linux.")
+    throw ToolError.failed("Text selection is unsupported on Linux.")
 }
 func readTextImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Text reading is unsupported on Linux.")
+    throw ToolError.failed("Text reading is unsupported on Linux.")
 }
 func performSecondaryActionImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Secondary actions are unsupported on Linux.")
+    throw ToolError.failed("Secondary actions are unsupported on Linux.")
 }
 
 struct PageCoordinateProbe: Equatable {
@@ -274,19 +274,19 @@ protocol PageJavaScriptExecuting {
 }
 struct SystemPageJavaScriptExecutor: PageJavaScriptExecuting {
     func evaluate(_ javascript: String, app: ResolvedApp, window: TargetWindow, cdpPort: Int?, targetURLContains: String?) async throws -> String {
-        throw ToolError.notImplemented("Page JavaScript execution is unsupported on Linux.")
+        throw ToolError.failed("Page JavaScript execution is unsupported on Linux.")
     }
     func insertText(_ text: String, selector: String, app: ResolvedApp, window: TargetWindow, cdpPort: Int?, targetURLContains: String?) async throws {}
 }
 
 func pageImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.notImplemented("Page interaction is unsupported on Linux.")
+    throw ToolError.failed("Page interaction is unsupported on Linux.")
 }
 func pageProbe(selector: String, app: ResolvedApp, window: TargetWindow, cdpPort: Int?, targetURLContains: String?) async throws -> PageProbe {
-    throw ToolError.notImplemented("Page interaction is unsupported on Linux.")
+    throw ToolError.failed("Page interaction is unsupported on Linux.")
 }
 func pageDOMSnapshot(selector: String, app: ResolvedApp, window: TargetWindow, cdpPort: Int?, targetURLContains: String?) async throws -> PageDOMSnapshot {
-    throw ToolError.notImplemented("Page interaction is unsupported on Linux.")
+    throw ToolError.failed("Page interaction is unsupported on Linux.")
 }
 func parsePageProbe(_ raw: String) throws -> PageProbe {
     let object = try parsePageJSONObject(raw)

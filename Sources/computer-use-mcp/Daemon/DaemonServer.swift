@@ -119,12 +119,27 @@ private func bindDaemonSocket() -> Int32 {
 }
 
 private func isTrustedPeer(_ fd: Int32) -> Bool {
+    #if os(Linux)
+    var credentials = LinuxPeerCredentials()
+    var length = socklen_t(MemoryLayout<LinuxPeerCredentials>.size)
+    let result = withUnsafeMutablePointer(to: &credentials) { pointer in
+        getsockopt(
+            fd,
+            Int32(SOL_SOCKET),
+            Int32(SO_PEERCRED),
+            pointer,
+            &length
+        )
+    }
+    return result == 0 && credentials.uid == geteuid()
+    #else
     var uid: uid_t = 0
     var gid: gid_t = 0
     guard getpeereid(fd, &uid, &gid) == 0 else {
         return false
     }
     return uid == geteuid()
+    #endif
 }
 
 private func serveConnection(fd: Int32, authToken: String, connectionTasks: DaemonConnectionTasks) {

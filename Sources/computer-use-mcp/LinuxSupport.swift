@@ -2,6 +2,12 @@
 import Foundation
 import Glibc
 
+struct LinuxPeerCredentials {
+    var pid: pid_t = 0
+    var uid: uid_t = 0
+    var gid: gid_t = 0
+}
+
 typealias CFTypeRef = Any
 typealias CFDictionary = [AnyHashable: Any]
 typealias CFMachPort = OpaquePointer
@@ -138,7 +144,7 @@ final class NSRunningApplication: @unchecked Sendable {
     enum ActivationPolicy { case prohibited, regular }
     var activationPolicy: ActivationPolicy { .regular }
     init() {}
-    init?(processIdentifier: pid_t) {}
+    init?(processIdentifier: pid_t) { return nil }
 }
 final class NSWorkspace: @unchecked Sendable {
     static let shared = NSWorkspace()
@@ -276,6 +282,4 @@ let kVK_F10 = 109
 let kVK_F11 = 103
 let kVK_F12 = 111
 func proc_listallpids(_ buffer: UnsafeMutableRawPointer, _ size: Int32) -> Int32 { 0 }
-func getpeereid(_ fd: Int32, _ euid: UnsafeMutablePointer<uid_t>, _ egid: UnsafeMutablePointer<gid_t>) -> Int32 { -1 }
-
 #endif

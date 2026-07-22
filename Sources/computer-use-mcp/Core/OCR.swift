@@ -36,7 +36,7 @@ func recognizeText(inPNG pngData: Data, pixelWidth: Int, pixelHeight: Int) async
 }
 #else
 func recognizeText(inPNG pngData: Data, pixelWidth: Int, pixelHeight: Int) async throws -> [OCRLine] {
-    throw ToolError.notImplemented("OCR is unsupported on Linux.")
+    throw ToolError.failed("OCR is unsupported on Linux.")
 }
 #endif
 

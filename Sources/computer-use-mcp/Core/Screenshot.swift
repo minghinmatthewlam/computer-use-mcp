@@ -241,6 +241,6 @@ private func encodePNG(_ image: CGImage) -> Data? {
 }
 #else
 func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: ScreenshotDetail) async throws -> WindowCapture {
-    throw ToolError.notImplemented("Screenshots are unsupported on Linux.")
+    throw ToolError.failed("Screenshots are unsupported on Linux.")
 }
 #endif

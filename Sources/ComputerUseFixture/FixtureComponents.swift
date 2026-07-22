@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -79,3 +80,4 @@ final class LiarButtonView: NSView {
             withAttributes: attrs)
     }
 }
+#endif

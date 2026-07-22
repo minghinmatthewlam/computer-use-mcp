@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -68,3 +69,4 @@ final class KeystrokeView: NSView {
         display.draw(at: NSPoint(x: 6, y: (bounds.height - 18) / 2), withAttributes: attrs)
     }
 }
+#endif

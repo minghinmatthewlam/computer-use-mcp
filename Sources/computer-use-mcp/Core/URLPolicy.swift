@@ -9,9 +9,11 @@
 // Substring match, case-insensitive. open_url applies the same patterns to
 // its URL argument directly.
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 let browserBundleIdentifiers: Set<String> = [
     "com.apple.safari", "com.apple.safaritechnologypreview",

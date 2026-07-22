@@ -10,9 +10,11 @@
 // Snapshots are persisted to disk so ids work across processes (the `serve`
 // server and the `call` harness, or a restarted server).
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import CryptoKit
-import Foundation
+#endif
 
 struct LocatorStep: Codable, Equatable {
     let role: String
@@ -434,8 +436,17 @@ actor SnapshotStore {
 /// generation tags.
 func treeFingerprint(_ treeText: String) -> String {
     let normalized = treeText.replacing(/e\d+@s\d+/, with: "e@")
+    #if os(macOS)
     let digest = SHA256.hash(data: Data(normalized.utf8))
     return digest.map { String(format: "%02x", $0) }.joined()
+    #else
+    var hash: UInt64 = 14695981039346656037
+    for byte in normalized.utf8 {
+        hash ^= UInt64(byte)
+        hash &*= 1099511628211
+    }
+    return String(format: "%016llx", hash)
+    #endif
 }
 
 /// What changed between the previous snapshot and a fresh capture, after id

@@ -1,6 +1,5 @@
 // computer-use-mcp — entry point.
 
-import CoreGraphics
 import Foundation
 
 // Establish the window-server connection on the main thread before any

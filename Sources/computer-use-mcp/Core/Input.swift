@@ -1,3 +1,4 @@
+ #if os(macOS)
 // Background-safe synthetic input delivery.
 //
 // The ladder, in order of preference, for delivering a mouse/scroll/key event
@@ -15,10 +16,12 @@
 // there is no reliable success signal, so escalation to Tier 4 is never
 // automatic — it requires the caller's explicit opt-in.
 
+import Foundation
+#if os(macOS)
 import AppKit
 import ApplicationServices
 import CoreGraphics
-import Foundation
+#endif
 
 // Private SPI mapping an AX window element to its CGWindowID, used as the
 // NSEvent windowNumber. Undocumented but stable; always guard the result.
@@ -495,3 +498,4 @@ func deliverKey(_ chord: KeyChord, context: DeliveryContext, targetAppIsActive: 
     }
     return mode
 }
+#endif

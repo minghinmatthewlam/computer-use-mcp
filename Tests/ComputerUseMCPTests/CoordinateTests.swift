@@ -1,4 +1,6 @@
+ #if os(macOS)
 import CoreGraphics
+#endif
 import Foundation
 import Testing
 

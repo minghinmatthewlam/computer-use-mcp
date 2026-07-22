@@ -8,9 +8,11 @@
 // an invisible session (unlocking is the user's decision — no Codex-style
 // auto-unlock behind a fake lock screen).
 
-import CoreGraphics
 import Foundation
+#if os(macOS)
+import CoreGraphics
 import IOKit.pwr_mgt
+#endif
 
 /// Recoverable pause for mutating tools while the screen is locked.
 /// Read-only perception stays available. `isLocked` is an autoclosure so the

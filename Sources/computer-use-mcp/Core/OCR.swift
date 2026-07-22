@@ -3,9 +3,11 @@
 // accessibility tree is missing or empty — custom-drawn UIs, games,
 // remote-desktop and virtualization windows.
 
-import CoreGraphics
 import Foundation
+#if os(macOS)
+import CoreGraphics
 import Vision
+#endif
 
 struct OCRLine: Sendable {
     let text: String
@@ -13,6 +15,7 @@ struct OCRLine: Sendable {
     let box: [Int]
 }
 
+ #if os(macOS)
 func recognizeText(inPNG pngData: Data, pixelWidth: Int, pixelHeight: Int) async throws -> [OCRLine] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
@@ -31,6 +34,11 @@ func recognizeText(inPNG pngData: Data, pixelWidth: Int, pixelHeight: Int) async
         }
     }.value
 }
+#else
+func recognizeText(inPNG pngData: Data, pixelWidth: Int, pixelHeight: Int) async throws -> [OCRLine] {
+    throw ToolError.notImplemented("OCR is unsupported on Linux.")
+}
+#endif
 
 /// Vision boxes are normalized with a bottom-left origin; screenshots use
 /// top-left pixel coordinates.

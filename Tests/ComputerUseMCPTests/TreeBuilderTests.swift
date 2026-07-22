@@ -1,4 +1,7 @@
+#if os(macOS)
 import CoreGraphics
+#endif
+import Foundation
 import Testing
 
 @testable import computer_use_mcp

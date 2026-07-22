@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 import WebKit
 
@@ -46,3 +47,4 @@ struct WebPane: NSViewRepresentable {
         </html>
         """
 }
+#endif

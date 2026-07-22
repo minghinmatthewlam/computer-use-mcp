@@ -1,3 +1,4 @@
+#if os(macOS)
 // `overlay` subcommand — the agent-cursor overlay helper process.
 //
 // The MCP server is a headless async stdio process with no AppKit run loop, so
@@ -20,8 +21,10 @@
 // glyph appears on whichever display contains it (including straddling a
 // boundary mid-glide).
 
+#if os(macOS)
 import AppKit
 import QuartzCore
+#endif
 
 /// Stderr diagnostics, enabled with COMPUTER_USE_MCP_OVERLAY_DEBUG=1. The
 /// helper inherits the server's stderr, so these reach the MCP host's logs.
@@ -29,7 +32,6 @@ func overlayDebug(_ message: @autoclosure () -> String) {
     guard ProcessInfo.processInfo.environment["COMPUTER_USE_MCP_OVERLAY_DEBUG"] == "1" else { return }
     FileHandle.standardError.write(Data("[overlay] \(message())\n".utf8))
 }
-
 @MainActor
 func runOverlay() -> Never {
     // Singleton: the flock is held for the helper's lifetime (the kernel
@@ -50,7 +52,6 @@ func runOverlay() -> Never {
     app.run()
     exit(0)
 }
-
 private func prepareOverlayFifo() {
     let path = overlayFifoPath()
     var status = stat()
@@ -811,3 +812,10 @@ private final class OverlayController: NSObject, NSApplicationDelegate {
         return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
 }
+#else
+import Foundation
+
+func runOverlay() -> Never {
+    fatalError("The agent cursor overlay is unsupported on Linux.")
+}
+#endif

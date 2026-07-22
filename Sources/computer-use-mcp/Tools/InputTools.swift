@@ -1,10 +1,12 @@
 // press_key, scroll, drag — the synthetic-input tools.
 
+import Foundation
+import MCP
+#if os(macOS)
 import AppKit
 import ApplicationServices
 import CoreGraphics
-import Foundation
-import MCP
+#endif
 
 func pressKeyImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     let app = try resolveApp(args.requireString("app"))

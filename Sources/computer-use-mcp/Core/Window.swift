@@ -1,8 +1,10 @@
 // Target-window selection for an app: front window by default, or by title.
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import CoreGraphics
-import Foundation
+#endif
 
 /// Backing scale of the display containing a global top-left point — the
 /// fallback pixels-per-point when a window cannot be captured and no prior

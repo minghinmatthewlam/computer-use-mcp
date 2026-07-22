@@ -1,8 +1,10 @@
 // Resolve a target app by name or bundle identifier, and enumerate
 // controllable apps.
 
-import AppKit
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 struct ResolvedApp {
     let pid: pid_t
@@ -61,10 +63,17 @@ private final class RunningApplicationsCache: @unchecked Sendable {
 /// pid size silently dropped the oldest three quarters of the list and made
 /// login-time apps unresolvable.
 func allProcessIDs() -> [pid_t] {
+    #if os(macOS)
     var pids = [pid_t](repeating: 0, count: 8192)
     let returned = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
     guard returned > 0 else { return [] }
     return pids.prefix(min(Int(returned), pids.count)).filter { $0 > 0 }
+    #else
+    (try? FileManager.default.contentsOfDirectory(atPath: "/proc"))?.compactMap { entry in
+        guard entry.allSatisfy(\.isNumber), let pid = Int32(entry), pid > 0 else { return nil }
+        return pid
+    } ?? []
+    #endif
 }
 
 func resolveApp(_ identifier: String) throws -> ResolvedApp {

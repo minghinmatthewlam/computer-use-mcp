@@ -1,11 +1,16 @@
+import Foundation
+#if os(macOS)
 import AppKit
 import ApplicationServices
 import CoreGraphics
 import Darwin
-import Foundation
 import ScreenCaptureKit
+#else
+import Glibc
+#endif
 
 func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthReport {
+    #if os(macOS)
     let accessibility: Bool
     if prompt {
         // Literal key for kAXTrustedCheckOptionPrompt; the C global is not
@@ -59,9 +64,29 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         tccAttribution: tccAttributionNote(parent: process.parent),
         recommendedNextAction: action
     )
+    #else
+    let process = ProcessDiagnostics.current()
+    return HealthReport(
+        reportVersion: 1,
+        version: version,
+        executablePath: executablePath(),
+        bundleIdentifier: Bundle.main.bundleIdentifier,
+        process: process,
+        permissions: PermissionDiagnostics(
+            accessibility: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Accessibility is unsupported on Linux"),
+            screenRecording: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Screen Recording is unsupported on Linux")
+        ),
+        captureService: CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux."),
+        daemon: daemonDiagnostics(),
+        telemetry: telemetryDiagnostics(),
+        tccAttribution: "Linux does not use TCC.",
+        recommendedNextAction: "Linux reports unsupported capabilities; use version/help/health_report for diagnostics."
+    )
+    #endif
 }
 
 private func captureServiceDiagnostic(screenRecordingGranted: Bool, probe: Bool) async -> CaptureServiceDiagnostic {
+    #if os(macOS)
     guard screenRecordingGranted else {
         return CaptureServiceDiagnostic(
             status: .skipped,
@@ -89,6 +114,9 @@ private func captureServiceDiagnostic(screenRecordingGranted: Bool, probe: Bool)
             detail: "ScreenCaptureKit did not respond: \(error)"
         )
     }
+    #else
+    return CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux.")
+    #endif
 }
 
 func recommendedNextAction(
@@ -174,6 +202,7 @@ struct ProcessDiagnostics: Codable, Sendable {
     let parent: ProcessIdentity?
 
     static func current() -> ProcessDiagnostics {
+        #if os(macOS)
         let pid = ProcessInfo.processInfo.processIdentifier
         let currentApp = NSRunningApplication.current
         let currentExecutablePath = executablePath()
@@ -186,6 +215,18 @@ struct ProcessDiagnostics: Codable, Sendable {
         )
         let parent = ProcessIdentity(pid: getppid())
         return ProcessDiagnostics(current: current, parent: parent)
+        #else
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let current = ProcessIdentity(
+            pid: pid,
+            name: ProcessInfo.processInfo.processName,
+            bundleIdentifier: Bundle.main.bundleIdentifier,
+            bundlePath: Bundle.main.bundleURL.standardizedFileURL.path,
+            executablePath: executablePath()
+        )
+        let parent = ProcessIdentity(pid: getppid())
+        return ProcessDiagnostics(current: current, parent: parent)
+        #endif
     }
 }
 
@@ -230,6 +271,7 @@ struct ProcessIdentity: Codable, Sendable {
 }
 
 private func processExecutablePath(pid: Int32) -> String? {
+    #if os(macOS)
     var buffer = [CChar](repeating: 0, count: 4096)
     let result = buffer.withUnsafeMutableBufferPointer { pointer in
         proc_pidpath(pid, pointer.baseAddress, UInt32(pointer.count))
@@ -237,6 +279,9 @@ private func processExecutablePath(pid: Int32) -> String? {
     guard result > 0 else { return nil }
     let bytes = buffer.prefix(Int(result)).map { UInt8(bitPattern: $0) }
     return String(decoding: bytes, as: UTF8.self)
+    #else
+    return nil
+    #endif
 }
 
 struct PermissionDiagnostics: Codable, Sendable {

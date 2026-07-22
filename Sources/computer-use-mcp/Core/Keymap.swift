@@ -1,11 +1,14 @@
+ #if os(macOS)
 // Parse xdotool-style key strings ("cmd+shift+s", "Return", "a") into a
 // CGKeyCode + modifier flags. Named keys use layout-independent virtual
 // keycodes; printable characters are translated against the current keyboard
 // layout via UCKeyTranslate.
 
+import Foundation
+#if os(macOS)
 import Carbon.HIToolbox
 import CoreGraphics
-import Foundation
+#endif
 
 struct KeyChord {
     let keyCode: CGKeyCode
@@ -138,3 +141,4 @@ enum Keymap {
         return String(utf16CodeUnits: chars, count: length)
     }
 }
+#endif

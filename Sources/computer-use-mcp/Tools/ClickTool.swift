@@ -3,9 +3,11 @@
 // background, no event posted); otherwise it descends the synthetic input
 // ladder (per-window NSEvent → per-pid CGEvent → guarded global cursor).
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 func clickImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     let app = try resolveApp(args.requireString("app"))

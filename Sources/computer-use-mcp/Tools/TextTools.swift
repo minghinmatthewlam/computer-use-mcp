@@ -1,9 +1,12 @@
+ #if os(macOS)
 // Text and value manipulation via the accessibility API: type_text,
 // set_value, select_text, perform_secondary_action.
 
-import ApplicationServices
 import Foundation
 import MCP
+#if os(macOS)
+import ApplicationServices
+#endif
 
 // MARK: - type_text
 
@@ -415,3 +418,4 @@ func performSecondaryActionImpl(_ args: [String: Value]) async throws -> CallToo
         verifier: verifier
     )
 }
+#endif

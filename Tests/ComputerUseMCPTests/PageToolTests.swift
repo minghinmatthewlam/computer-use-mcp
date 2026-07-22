@@ -1,5 +1,7 @@
+#if os(macOS)
 import ApplicationServices
 import CoreGraphics
+import Foundation
 import Testing
 
 @testable import computer_use_mcp
@@ -182,3 +184,4 @@ private struct MockPageJavaScriptExecutor: PageJavaScriptExecuting {
         ResolvedApp(pid: 123, name: "TestApp", bundleIdentifier: bundleIdentifier)
     }
 }
+#endif

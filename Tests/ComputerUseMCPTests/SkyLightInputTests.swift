@@ -1,5 +1,11 @@
+ #if os(macOS)
+#if os(macOS)
 import CoreGraphics
+#endif
+#if os(macOS)
 import Darwin
+#endif
+import Foundation
 import Testing
 
 @testable import computer_use_mcp
@@ -200,8 +206,9 @@ private final class RecordingSkyLightPosting: SkyLightEventPosting {
         return windowLocationResult
     }
 
-    func setIntegerField(_ event: CGEvent, field: Int, value: Int64) -> Bool {
-        integerFields.append(field)
-        return integerFieldResult
+func setIntegerField(_ event: CGEvent, field: Int, value: Int64) -> Bool {
+    integerFields.append(field)
+    return integerFieldResult
     }
 }
+#endif

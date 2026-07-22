@@ -1,4 +1,5 @@
-import CoreGraphics
+
+import Foundation
 
 /// Geometry from AX/CoreGraphics/JavaScript can cross process boundaries with
 /// NaN or infinite components. Swift traps when such values are converted to

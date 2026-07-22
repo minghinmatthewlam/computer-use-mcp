@@ -14,9 +14,11 @@
 // chains can be added later without new plumbing. Inspired by
 // lahfir/agent-desktop's chain_defs.rs, adapted to our verifier.
 
+import Foundation
+#if os(macOS)
 import ApplicationServices
 import CoreGraphics
-import Foundation
+#endif
 
 // MARK: - Chain definition (data-driven)
 

@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import SwiftUI
 
@@ -54,7 +55,7 @@ struct AppKitRowList: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {}
 
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         func numberOfRows(in tableView: NSTableView) -> Int { rowCount }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -72,3 +73,4 @@ struct AppKitRowList: NSViewRepresentable {
         }
     }
 }
+#endif

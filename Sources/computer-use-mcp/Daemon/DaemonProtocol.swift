@@ -3,8 +3,12 @@
 // connection is the session identity for app leases.
 
 import Foundation
-import Security
 import MCP
+#if os(macOS)
+import Security
+#else
+import Glibc
+#endif
 
 func daemonSocketPath() -> String {
     daemonRuntimePaths().socket
@@ -390,12 +394,18 @@ private func readDaemonAuthToken(path: String) -> String? {
 
 private func generateDaemonAuthToken() throws -> String {
     var bytes = [UInt8](repeating: 0, count: 32)
+    #if os(macOS)
     let status = bytes.withUnsafeMutableBytes { buffer in
         SecRandomCopyBytes(kSecRandomDefault, buffer.count, buffer.baseAddress!)
     }
     guard status == errSecSuccess else {
         throw DaemonAuthError.randomFailed
     }
+    #else
+    for index in bytes.indices {
+        bytes[index] = UInt8.random(in: .min ... .max)
+    }
+    #endif
     return Data(bytes).base64EncodedString()
 }
 

@@ -13,11 +13,13 @@
 // thread is parked. The compile step (recorded events → skill steps) is a
 // pure function, unit-tested without a tap.
 
+import Foundation
+import MCP
+#if os(macOS)
 import ApplicationServices
 import Carbon.HIToolbox
 import CoreGraphics
-import Foundation
-import MCP
+#endif
 
 /// One observed user action, app-relative. Captured live, compiled at stop.
 enum RecordedEvent: Equatable {
@@ -85,6 +87,7 @@ enum RecorderError: Error, CustomStringConvertible {
     }
 }
 
+#if os(macOS)
 /// Owns the event tap and the live event buffer. A final class (not an actor)
 /// because the CGEventTap C callback needs a stable refcon pointer and runs on
 /// the tap thread; a lock guards the shared buffer.
@@ -295,6 +298,20 @@ final class SkillRecorder: @unchecked Sendable {
         pendingText = ""
     }
 }
+#else
+final class SkillRecorder: @unchecked Sendable {
+    static let shared = SkillRecorder()
+    var isRecording: Bool { false }
+
+    func start(app: ResolvedApp) throws {
+        throw RecorderError.tapCreationFailed
+    }
+
+    func stop() throws -> (app: String, steps: [SkillStep]) {
+        throw RecorderError.notRecording
+    }
+}
+#endif
 
 /// Map a control character produced by keyboardGetUnicodeString to a key name,
 /// or nil when it is ordinary text.

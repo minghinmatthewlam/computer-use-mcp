@@ -1,6 +1,8 @@
+import Foundation
+#if os(macOS)
 import CoreGraphics
 import Darwin
-import Foundation
+#endif
 
 private let skyLightFrameworkPath = "/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight"
 

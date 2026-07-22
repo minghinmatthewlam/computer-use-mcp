@@ -1,3 +1,4 @@
+ #if os(macOS)
 import MCP
 import Testing
 
@@ -189,3 +190,4 @@ private func invalidArgumentMessage(_ body: () throws -> Void) -> String {
     }
     return ""
 }
+#endif

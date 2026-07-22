@@ -7,9 +7,13 @@
 // shared system services, and per-app leases (AppLeases) keep two sessions
 // from interleaving actions inside the same app.
 
-import Darwin
 import Foundation
 import MCP
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 
 private let daemonConnectionLimiter = DaemonConnectionLimiter(maxConnections: DaemonProtocolLimits.maxConcurrentConnections)
 
@@ -84,7 +88,7 @@ func runDaemon() async -> Never {
 private func bindDaemonSocket() -> Int32 {
     let path = daemonSocketPath()
     unlink(path)  // stale socket from a dead daemon; the lock arbitrates liveness
-    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
     guard fd >= 0 else { fatalError("daemon: socket() failed: \(errno)") }
 
     var address = sockaddr_un()

@@ -9,6 +9,11 @@ import ScreenCaptureKit
 import Glibc
 #endif
 
+struct InputDeliveryDiagnostic: Codable, Sendable {
+    let status: String
+    let detail: String
+}
+
 func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthReport {
     #if os(macOS)
     let accessibility: Bool
@@ -60,12 +65,16 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         permissions: permissions,
         captureService: captureService,
         daemon: daemon,
+        inputDelivery: nil,
         telemetry: telemetryDiagnostics(),
         tccAttribution: tccAttributionNote(parent: process.parent),
         recommendedNextAction: action
     )
     #else
     let process = ProcessDiagnostics.current()
+    let accessibility = linuxAccessibilityAvailable()
+    let inputDelivery = linuxInputDeliveryDiagnostic()
+    let captureService = linuxCaptureDiagnostic()
     return HealthReport(
         reportVersion: 1,
         version: version,
@@ -73,14 +82,29 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         bundleIdentifier: Bundle.main.bundleIdentifier,
         process: process,
         permissions: PermissionDiagnostics(
-            accessibility: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Accessibility is unsupported on Linux"),
-            screenRecording: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Screen Recording is unsupported on Linux")
+            accessibility: PermissionStatus(
+                granted: accessibility,
+                status: accessibility ? "granted" : "not_available",
+                requiredFor: "AT-SPI2 accessibility bus and application trees"
+            ),
+            screenRecording: PermissionStatus(
+                granted: false,
+                status: "unsupported",
+                requiredFor: "X11 display access provides screenshots; macOS Screen Recording permission is not applicable"
+            )
         ),
-        captureService: CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux."),
+        captureService: captureService,
         daemon: daemonDiagnostics(),
+        inputDelivery: inputDelivery,
         telemetry: telemetryDiagnostics(),
         tccAttribution: "Linux does not use TCC.",
-        recommendedNextAction: "Linux reports unsupported capabilities; use version/help/health_report for diagnostics."
+        recommendedNextAction: accessibility
+            ? (inputDelivery.status == "available"
+                ? (captureService.status == .responsive
+                    ? "AT-SPI2 perception, X11/XTest input, and X11 capture are available; Wayland is unsupported."
+                    : "AT-SPI2 perception and X11/XTest input are available, but X11 capture is unavailable: \(captureService.detail)")
+                : "AT-SPI2 perception is available, but X11/XTest input is unavailable: \(inputDelivery.detail)")
+            : "Start an AT-SPI2 accessibility bus and enable application accessibility, then rerun health_report."
     )
     #endif
 }
@@ -178,6 +202,7 @@ struct HealthReport: Codable, Sendable {
     let permissions: PermissionDiagnostics
     let captureService: CaptureServiceDiagnostic
     let daemon: DaemonDiagnostics
+    let inputDelivery: InputDeliveryDiagnostic?
     /// Absent when no daemon has persisted a telemetry snapshot yet (or
     /// telemetry is disabled with "no_telemetry").
     let telemetry: TelemetryReport?

@@ -45,6 +45,9 @@ private final class RunningApplicationsCache: @unchecked Sendable {
     }
 
     private static func scan() -> [NSRunningApplication] {
+        #if os(Linux)
+        return NSWorkspace.shared.runningApplications
+        #else
         let pids = allProcessIDs()
         guard !pids.isEmpty else { return NSWorkspace.shared.runningApplications }
         return pids.compactMap { pid in
@@ -53,6 +56,7 @@ private final class RunningApplicationsCache: @unchecked Sendable {
             else { return nil }
             return app
         }
+        #endif
     }
 }
 

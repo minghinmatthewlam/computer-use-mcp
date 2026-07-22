@@ -213,6 +213,7 @@ private func outcomeFields(in result: CallTool.Result) throws -> [String: Value]
                 secretExists: false,
                 secretContentsReported: false
             ),
+            inputDelivery: nil,
             telemetry: nil,
             tccAttribution: "mock attribution",
             recommendedNextAction: recommendedNextAction(

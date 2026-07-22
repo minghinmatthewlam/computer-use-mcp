@@ -39,6 +39,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux interaction dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libatspi2.0-dev \
+            libx11-dev \
+            libxtst-dev \
+            libxext-dev \
+            libpng-dev
+
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
         with:

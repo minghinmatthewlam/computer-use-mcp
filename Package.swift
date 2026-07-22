@@ -15,9 +15,36 @@ let package = Package(
         .executableTarget(
             name: "computer-use-mcp",
             dependencies: [
-                .product(name: "MCP", package: "swift-sdk")
+                .product(name: "MCP", package: "swift-sdk"),
+                .target(name: "CAtSpi", condition: .when(platforms: [.linux])),
+                .target(name: "CX11", condition: .when(platforms: [.linux])),
             ],
-            path: "Sources/computer-use-mcp"
+            path: "Sources/computer-use-mcp",
+            linkerSettings: [
+                .linkedLibrary("atspi", .when(platforms: [.linux])),
+                .linkedLibrary("X11", .when(platforms: [.linux])),
+                .linkedLibrary("Xtst", .when(platforms: [.linux])),
+                .linkedLibrary("png", .when(platforms: [.linux])),
+                .linkedLibrary("gobject-2.0", .when(platforms: [.linux])),
+                .linkedLibrary("glib-2.0", .when(platforms: [.linux])),
+                .linkedLibrary("dbus-1", .when(platforms: [.linux])),
+            ]
+        ),
+        .systemLibrary(
+            name: "CAtSpi",
+            path: "Sources/CAtSpi",
+            pkgConfig: "atspi-2",
+            providers: [
+                .apt(["libatspi2.0-dev"])
+            ]
+        ),
+        .systemLibrary(
+            name: "CX11",
+            path: "Sources/CX11",
+            pkgConfig: "xtst",
+            providers: [
+                .apt(["libx11-dev", "libxtst-dev", "libpng-dev"])
+            ]
         ),
         // Deterministic GUI fixture app for the end-to-end "truth suite".
         // See docs/fixture-app.md.

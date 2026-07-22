@@ -1,0 +1,7 @@
+module CAtSpi [system] {
+    header "include/catspi_shim.h"
+    link "atspi"
+    link "gobject-2.0"
+    link "glib-2.0"
+    export *
+}

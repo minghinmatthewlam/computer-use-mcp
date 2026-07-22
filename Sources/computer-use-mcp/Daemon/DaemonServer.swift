@@ -88,7 +88,11 @@ func runDaemon() async -> Never {
 private func bindDaemonSocket() -> Int32 {
     let path = daemonSocketPath()
     unlink(path)  // stale socket from a dead daemon; the lock arbitrates liveness
+    #if os(Linux)
     let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+    #else
+    let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+    #endif
     guard fd >= 0 else { fatalError("daemon: socket() failed: \(errno)") }
 
     var address = sockaddr_un()

@@ -103,7 +103,11 @@ actor DaemonClient {
     }
 
     private static func connect() -> Int32? {
+        #if os(Linux)
         let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #else
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        #endif
         guard fd >= 0 else { return nil }
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)

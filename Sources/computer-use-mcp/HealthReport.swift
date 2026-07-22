@@ -60,6 +60,7 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         permissions: permissions,
         captureService: captureService,
         daemon: daemon,
+        inputDelivery: nil,
         telemetry: telemetryDiagnostics(),
         tccAttribution: tccAttributionNote(parent: process.parent),
         recommendedNextAction: action
@@ -67,6 +68,7 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
     #else
     let process = ProcessDiagnostics.current()
     let accessibility = linuxAccessibilityAvailable()
+    let inputDelivery = linuxInputDeliveryDiagnostic()
     return HealthReport(
         reportVersion: 1,
         version: version,
@@ -83,10 +85,13 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         ),
         captureService: CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux."),
         daemon: daemonDiagnostics(),
+        inputDelivery: inputDelivery,
         telemetry: telemetryDiagnostics(),
         tccAttribution: "Linux does not use TCC.",
         recommendedNextAction: accessibility
-            ? "AT-SPI2 perception is available; X11 input and capture remain separate Linux engine phases."
+            ? (inputDelivery.status == "available"
+                ? "AT-SPI2 perception and X11/XTest input are available; capture remains a separate Linux engine phase."
+                : "AT-SPI2 perception is available, but X11/XTest input is unavailable: \(inputDelivery.detail)")
             : "Start an AT-SPI2 accessibility bus and enable application accessibility, then rerun health_report."
     )
     #endif
@@ -185,6 +190,7 @@ struct HealthReport: Codable, Sendable {
     let permissions: PermissionDiagnostics
     let captureService: CaptureServiceDiagnostic
     let daemon: DaemonDiagnostics
+    let inputDelivery: InputDeliveryDiagnostic?
     /// Absent when no daemon has persisted a telemetry snapshot yet (or
     /// telemetry is disabled with "no_telemetry").
     let telemetry: TelemetryReport?

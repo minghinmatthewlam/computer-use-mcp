@@ -1,0 +1,6 @@
+module CX11 [system] {
+    header "include/cx11_shim.h"
+    link "X11"
+    link "Xtst"
+    export *
+}

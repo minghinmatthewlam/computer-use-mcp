@@ -17,10 +17,13 @@ let package = Package(
             dependencies: [
                 .product(name: "MCP", package: "swift-sdk"),
                 .target(name: "CAtSpi", condition: .when(platforms: [.linux])),
+                .target(name: "CX11", condition: .when(platforms: [.linux])),
             ],
             path: "Sources/computer-use-mcp",
             linkerSettings: [
                 .linkedLibrary("atspi", .when(platforms: [.linux])),
+                .linkedLibrary("X11", .when(platforms: [.linux])),
+                .linkedLibrary("Xtst", .when(platforms: [.linux])),
                 .linkedLibrary("gobject-2.0", .when(platforms: [.linux])),
                 .linkedLibrary("glib-2.0", .when(platforms: [.linux])),
                 .linkedLibrary("dbus-1", .when(platforms: [.linux])),
@@ -32,6 +35,14 @@ let package = Package(
             pkgConfig: "atspi-2",
             providers: [
                 .apt(["libatspi2.0-dev"])
+            ]
+        ),
+        .systemLibrary(
+            name: "CX11",
+            path: "Sources/CX11",
+            pkgConfig: "xtst",
+            providers: [
+                .apt(["libx11-dev", "libxtst-dev"])
             ]
         ),
         // Deterministic GUI fixture app for the end-to-end "truth suite".

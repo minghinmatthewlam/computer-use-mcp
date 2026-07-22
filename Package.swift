@@ -24,6 +24,7 @@ let package = Package(
                 .linkedLibrary("atspi", .when(platforms: [.linux])),
                 .linkedLibrary("X11", .when(platforms: [.linux])),
                 .linkedLibrary("Xtst", .when(platforms: [.linux])),
+                .linkedLibrary("png", .when(platforms: [.linux])),
                 .linkedLibrary("gobject-2.0", .when(platforms: [.linux])),
                 .linkedLibrary("glib-2.0", .when(platforms: [.linux])),
                 .linkedLibrary("dbus-1", .when(platforms: [.linux])),
@@ -42,7 +43,7 @@ let package = Package(
             path: "Sources/CX11",
             pkgConfig: "xtst",
             providers: [
-                .apt(["libx11-dev", "libxtst-dev"])
+                .apt(["libx11-dev", "libxtst-dev", "libpng-dev"])
             ]
         ),
         // Deterministic GUI fixture app for the end-to-end "truth suite".

@@ -69,6 +69,7 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
     let process = ProcessDiagnostics.current()
     let accessibility = linuxAccessibilityAvailable()
     let inputDelivery = linuxInputDeliveryDiagnostic()
+    let captureService = linuxCaptureDiagnostic()
     return HealthReport(
         reportVersion: 1,
         version: version,
@@ -83,14 +84,16 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
             ),
             screenRecording: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Screen Recording is unsupported on Linux")
         ),
-        captureService: CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux."),
+        captureService: captureService,
         daemon: daemonDiagnostics(),
         inputDelivery: inputDelivery,
         telemetry: telemetryDiagnostics(),
         tccAttribution: "Linux does not use TCC.",
         recommendedNextAction: accessibility
             ? (inputDelivery.status == "available"
-                ? "AT-SPI2 perception and X11/XTest input are available; capture remains a separate Linux engine phase."
+                ? (captureService.status == .responsive
+                    ? "AT-SPI2 perception, X11/XTest input, and X11 capture are available; Wayland is unsupported."
+                    : "AT-SPI2 perception and X11/XTest input are available, but X11 capture is unavailable: \(captureService.detail)")
                 : "AT-SPI2 perception is available, but X11/XTest input is unavailable: \(inputDelivery.detail)")
             : "Start an AT-SPI2 accessibility bus and enable application accessibility, then rerun health_report."
     )

@@ -14,8 +14,8 @@ and the agent can **see and operate the apps on your Mac — in the background,
 without hijacking your cursor or stealing focus.**
 
 > **Status:** pre-1.0, used in production by the authors. The interaction engine
-> runs on macOS while the Linux build, tests, CLI, and daemon plumbing are
-> supported. On macOS it runs while the Mac is unlocked (the system is kept from
+> runs on macOS and X11 Linux; Linux requires an AT-SPI2 accessibility bus and
+> does not support Wayland. On macOS it runs while the Mac is unlocked (the system is kept from
 > idle-sleeping during active sessions; if the screen locks, mutating tools pause
 > with a recoverable error until you unlock).
 
@@ -521,9 +521,10 @@ productionization checklist.
   `allow_global_cursor: true` as an explicit fallback.
 - Menu key-equivalents (e.g. `cmd+a`) are reliable when the app is the key window;
   some apps ignore them when targeted purely in the background.
-- The interaction engine is macOS-only (Accessibility, ScreenCaptureKit, and
-  CoreGraphics). Linux tools that require those capabilities return structured
-  unsupported errors; the protocol/tool layer is OS-agnostic.
+- Linux supports AT-SPI2 perception, X11/XTest input, X11 screenshots, build,
+  tests, CLI, and daemon plumbing. Wayland is not supported; overlay, OCR, and
+  skills recording remain macOS-only. Other unavailable Linux capabilities
+  return structured errors; the protocol/tool layer is OS-agnostic.
 
 ## Development
 

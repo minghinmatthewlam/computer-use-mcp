@@ -7,6 +7,8 @@ import CoreGraphics
 import ImageIO
 @preconcurrency import ScreenCaptureKit
 import UniformTypeIdentifiers
+#elseif os(Linux)
+import CX11
 #endif
 
 struct WindowCapture {
@@ -240,7 +242,95 @@ private func encodePNG(_ image: CGImage) -> Data? {
     return data as Data
 }
 #else
+func linuxCaptureDiagnostic() -> CaptureServiceDiagnostic {
+    guard let displayName = ProcessInfo.processInfo.environment["DISPLAY"], !displayName.isEmpty else {
+        return CaptureServiceDiagnostic(
+            status: .skipped,
+            detail: "DISPLAY is not set, so X11 capture is unavailable."
+        )
+    }
+    guard let display = cx11_open_display() else {
+        return CaptureServiceDiagnostic(
+            status: .skipped,
+            detail: "Could not open X11 display \(displayName) for capture."
+        )
+    }
+    cx11_close_display(display)
+    return CaptureServiceDiagnostic(
+        status: .responsive,
+        detail: "X11 root-window capture is available on display \(displayName)."
+    )
+}
+
 func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: ScreenshotDetail) async throws -> WindowCapture {
-    throw ToolError.failed("Screenshots are unsupported on Linux.")
+    guard frame.width > 0, frame.height > 0 else {
+        throw ToolError.failed("Cannot capture a window with an empty frame.")
+    }
+    guard let display = cx11_open_display() else {
+        throw ToolError.failed(
+            "X11 capture is unavailable because DISPLAY is not set or the X server cannot be opened."
+        )
+    }
+    defer { cx11_close_display(display) }
+
+    let sourceWidth = Int(frame.width.rounded(.up))
+    let sourceHeight = Int(frame.height.rounded(.up))
+    var sourcePixels: UnsafeMutablePointer<UInt8>?
+    guard cx11_capture_root_rgba(
+        display,
+        Int32(frame.origin.x.rounded()),
+        Int32(frame.origin.y.rounded()),
+        UInt32(sourceWidth),
+        UInt32(sourceHeight),
+        &sourcePixels
+    ) != 0, let sourcePixels else {
+        throw ToolError.failed("Could not capture the X11 root window at the requested frame.")
+    }
+    defer { cx11_free(sourcePixels) }
+
+    let maxDimension = Int(detail.maxDimension.rounded(.down))
+    let scale = min(1.0, Double(maxDimension) / Double(max(sourceWidth, sourceHeight)))
+    let outputWidth = max(1, Int((Double(sourceWidth) * scale).rounded()))
+    let outputHeight = max(1, Int((Double(sourceHeight) * scale).rounded()))
+    let outputStride = outputWidth * 4
+    var output = [UInt8](repeating: 0, count: outputStride * outputHeight)
+    let source = UnsafeBufferPointer(
+        start: sourcePixels,
+        count: sourceWidth * sourceHeight * 4
+    )
+    for row in 0..<outputHeight {
+        let sourceRow = min(sourceHeight - 1, Int(Double(row) / scale))
+        for column in 0..<outputWidth {
+            let sourceColumn = min(sourceWidth - 1, Int(Double(column) / scale))
+            let sourceOffset = (sourceRow * sourceWidth + sourceColumn) * 4
+            let outputOffset = row * outputStride + column * 4
+            output[outputOffset] = source[sourceOffset]
+            output[outputOffset + 1] = source[sourceOffset + 1]
+            output[outputOffset + 2] = source[sourceOffset + 2]
+            output[outputOffset + 3] = source[sourceOffset + 3]
+        }
+    }
+
+    var encoded: UnsafeMutablePointer<UInt8>?
+    var encodedSize: Int = 0
+    let encodedOK = output.withUnsafeBufferPointer { buffer in
+        cx11_encode_png_rgba(
+            buffer.baseAddress,
+            UInt32(outputWidth),
+            UInt32(outputHeight),
+            UInt32(outputStride),
+            &encoded,
+            &encodedSize
+        )
+    }
+    guard encodedOK != 0, let encoded, encodedSize > 0 else {
+        throw ToolError.failed("Failed to encode the X11 window screenshot as PNG.")
+    }
+    defer { cx11_free(encoded) }
+    return WindowCapture(
+        pngData: Data(bytes: encoded, count: encodedSize),
+        pixelWidth: outputWidth,
+        pixelHeight: outputHeight
+    )
 }
 #endif

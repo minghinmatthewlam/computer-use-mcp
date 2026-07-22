@@ -491,14 +491,159 @@ func unicodeTypingChunks(_ text: String) -> [[UniChar]] {
     text.map { Array(String($0).utf16) }
 }
 
+private func linuxExecutable(named name: String) -> String? {
+    let candidates = [
+        name,
+        "/usr/bin/\(name)",
+        "/usr/local/bin/\(name)",
+        "\(NSHomeDirectory())/.local/bin/\(name)",
+    ]
+    return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+}
+
+private func runLinuxProcess(
+    executable: String,
+    arguments: [String],
+    input: Data? = nil
+) throws -> (status: Int32, output: Data, error: Data) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = arguments
+    let output = Pipe()
+    let error = Pipe()
+    process.standardOutput = output
+    process.standardError = error
+    if let input {
+        let pipe = Pipe()
+        process.standardInput = pipe
+        try process.run()
+        pipe.fileHandleForWriting.write(input)
+        pipe.fileHandleForWriting.closeFile()
+    } else {
+        try process.run()
+    }
+    process.waitUntilExit()
+    return (
+        process.terminationStatus,
+        output.fileHandleForReading.readDataToEndOfFile(),
+        error.fileHandleForReading.readDataToEndOfFile()
+    )
+}
+
+private func launchLinuxProcess(executable: String, arguments: [String], input: Data) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = arguments
+    let pipe = Pipe()
+    process.standardInput = pipe
+    try process.run()
+    pipe.fileHandleForWriting.write(input)
+    pipe.fileHandleForWriting.closeFile()
+}
+
 func openAppImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("App launching is unsupported on Linux.")
+    let identifier = try args.requireString("app")
+    let activate = args.bool("activate") ?? false
+    let confirmed = SafetyPolicy.confirmed(args)
+    if let running = try? resolveApp(identifier) {
+        try SafetyPolicy.checkOpenApp(
+            identifier: running.name,
+            activate: activate,
+            isAlreadyRunning: true,
+            confirmed: confirmed
+        )
+        return .text("\(running.name) is already running.")
+    }
+    try SafetyPolicy.checkOpenApp(
+        identifier: identifier,
+        activate: activate,
+        isAlreadyRunning: false,
+        confirmed: confirmed
+    )
+    let executable: String
+    let arguments: [String]
+    if let gtkLaunch = linuxExecutable(named: "gtk-launch"),
+        !identifier.contains("/"),
+        identifier.hasSuffix(".desktop")
+    {
+        executable = gtkLaunch
+        arguments = [identifier]
+    } else if let path = linuxExecutable(named: identifier) {
+        executable = path
+        arguments = []
+    } else if FileManager.default.isExecutableFile(atPath: identifier) {
+        executable = identifier
+        arguments = []
+    } else {
+        throw ToolError.failed(
+            "No executable named \"\(identifier)\" was found on Linux. Pass a binary name or executable path."
+        )
+    }
+    do {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment
+        if process.environment?["GTK_MODULES"] == nil {
+            process.environment?["GTK_MODULES"] = "atk-bridge"
+        }
+        try process.run()
+        try? await Task.sleep(for: .milliseconds(300))
+        guard process.isRunning else {
+            throw ToolError.failed("\(identifier) exited immediately after launch.")
+        }
+        return .text("Launched \(identifier) (pid \(process.processIdentifier)).")
+    } catch {
+        throw ToolError.failed("Launching \(identifier) failed: \(error.localizedDescription).")
+    }
 }
 func openURLImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("URL opening is unsupported on Linux.")
+    let raw = try args.requireString("url")
+    try requireFocusChangeAllowed(
+        args,
+        reason: "Opening a URL or file path can launch or activate its default handler."
+    )
+    let url: URL
+    if let parsed = URL(string: raw), parsed.scheme != nil {
+        url = parsed
+    } else if FileManager.default.fileExists(atPath: (raw as NSString).expandingTildeInPath) {
+        url = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath)
+    } else {
+        throw ToolError.invalidArguments("\"\(raw)\" is not a valid URL.")
+    }
+    try SafetyPolicy.checkOpenURL(url, confirmed: SafetyPolicy.confirmed(args))
+    guard let opener = linuxExecutable(named: "xdg-open") else {
+        throw ToolError.failed("URL opening requires xdg-open on Linux.")
+    }
+    do {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: opener)
+        process.arguments = [raw]
+        process.environment = ProcessInfo.processInfo.environment
+        try process.run()
+        return .text("Opened \(raw) with xdg-open.")
+    } catch {
+        throw ToolError.failed("Opening \(raw) failed: \(error.localizedDescription).")
+    }
 }
 func listWindowsImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("Window enumeration is unsupported on Linux.")
+    let app = try resolveApp(args.requireString("app"))
+    try requireAccessibilityTrusted()
+    try requireAppAlive(app)
+    let windows = axElements(app.axApplication, kAXWindowsAttribute)
+    guard !windows.isEmpty else {
+        return .text("\(app.name) has no windows right now.")
+    }
+    var lines = ["Windows of \(app.name) (pid \(app.pid)):"]
+    for window in windows where axRole(window) == "AXWindow" {
+        var parts = ["\"\(axString(window, kAXTitleAttribute) ?? "")\""]
+        if let frame = axFrame(window) {
+            parts.append("(\(Int(frame.origin.x)),\(Int(frame.origin.y)) \(Int(frame.width))x\(Int(frame.height)) pt)")
+        }
+        if axBool(window, kAXFocusedAttribute) == true { parts.append("focused") }
+        lines.append("  " + parts.joined(separator: " "))
+    }
+    return .text(lines.joined(separator: "\n"))
 }
 func manageWindowImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     throw ToolError.failed("Window management is unsupported on Linux.")
@@ -506,15 +651,156 @@ func manageWindowImpl(_ args: [String: Value]) async throws -> CallTool.Result {
 func clickMenuItemImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     throw ToolError.failed("Menu interaction is unsupported on Linux.")
 }
+private func linuxClipboardCommand() -> (String, [String], [String])? {
+    if let xclip = linuxExecutable(named: "xclip") {
+        return (
+            xclip,
+            ["-selection", "clipboard", "-o"],
+            ["-selection", "clipboard", "-in"]
+        )
+    }
+    if let xsel = linuxExecutable(named: "xsel") {
+        return (
+            xsel,
+            ["--clipboard", "--output"],
+            ["--clipboard", "--input"]
+        )
+    }
+    return nil
+}
 func readClipboardImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("Clipboard access is unsupported on Linux.")
+    guard let (command, readArguments, _) = linuxClipboardCommand() else {
+        throw ToolError.failed("Clipboard access requires xclip or xsel on Linux.")
+    }
+    let result = try runLinuxProcess(executable: command, arguments: readArguments)
+    guard result.status == 0 else {
+        let detail = String(data: result.error, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        throw ToolError.failed("Could not read the X11 clipboard\(detail.map { ": \($0)" } ?? "").")
+    }
+    let text = String(data: result.output, encoding: .utf8) ?? ""
+    return .text("Clipboard text (\(text.count) chars):\n\(text)")
 }
 func writeClipboardImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("Clipboard access is unsupported on Linux.")
+    let text = try args.requireString("text")
+    try ArgumentBounds.checkStringLength(text, argument: "text", maximum: ArgumentBounds.maxClipboardCharacters)
+    try SafetyPolicy.checkClipboardWrite(confirmed: SafetyPolicy.confirmed(args))
+    guard let (command, _, writeArguments) = linuxClipboardCommand() else {
+        throw ToolError.failed("Clipboard access requires xclip or xsel on Linux.")
+    }
+    let previous = try? runLinuxProcess(
+        executable: command,
+        arguments: linuxClipboardCommand()!.1
+    )
+    let previousText: String?
+    if let previous, previous.status == 0 {
+        previousText = String(data: previous.output, encoding: .utf8)
+    } else {
+        previousText = nil
+    }
+    do {
+        try launchLinuxProcess(
+            executable: command,
+            arguments: writeArguments,
+            input: Data(text.utf8)
+        )
+    } catch {
+        throw ToolError.failed("Could not write the X11 clipboard: \(error.localizedDescription).")
+    }
+    try? await Task.sleep(for: .milliseconds(80))
+    let verification = try? runLinuxProcess(
+        executable: command,
+        arguments: linuxClipboardCommand()!.1
+    )
+    guard let verification, verification.status == 0,
+        String(data: verification.output, encoding: .utf8) == text
+    else {
+        if let previousText {
+            try? launchLinuxProcess(
+                executable: command,
+                arguments: writeArguments,
+                input: Data(previousText.utf8)
+            )
+        }
+        throw ToolError.failed("The X11 clipboard did not accept the requested write.")
+    }
+    return .text("Replaced the clipboard with \(text.count) characters.")
 }
 func clipboardRestoreValue(committed: Bool, previous: String?) -> String? { committed ? nil : previous }
 func waitForImpl(_ args: [String: Value]) async throws -> CallTool.Result {
-    throw ToolError.failed("Waiting for UI conditions is unsupported on Linux.")
+    let app = try resolveApp(args.requireString("app"))
+    try requireAccessibilityTrusted()
+    let label = args.string("label")
+    let role = args.string("role")
+    let valueContains = args.string("value_contains")
+    guard label != nil || role != nil || valueContains != nil else {
+        throw ToolError.invalidArguments("Provide at least one of label, role, or value_contains.")
+    }
+    let waitForGone = args.bool("gone") ?? false
+    let timeout = min(60.0, max(1.0, args.number("timeout_seconds") ?? 10))
+    let start = Date()
+    let deadline = start.addingTimeInterval(timeout)
+    var conditionMet = false
+    repeat {
+        let window = try? targetWindow(for: app, title: args.string("window_title"))
+        let found = window.map {
+            linuxElementExists(
+                in: $0.element,
+                role: role,
+                label: label,
+                valueContains: valueContains
+            )
+        } ?? false
+        if found != waitForGone {
+            conditionMet = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(400))
+    } while Date() < deadline
+    let what = [
+        role.map { "role \($0)" },
+        label.map { "label \"\($0)\"" },
+        valueContains.map { "value containing \"\($0)\"" },
+    ].compactMap { $0 }.joined(separator: ", ")
+    let elapsed = String(format: "%.1f", Date().timeIntervalSince(start))
+    let note = conditionMet
+        ? "Condition met after \(elapsed)s: \(what)\(waitForGone ? " is gone" : " appeared")."
+        : "TIMED OUT after \(Int(timeout))s waiting for \(what)\(waitForGone ? " to disappear" : ""). Current state below."
+    return try await stateResult(
+        app: app,
+        windowTitle: args.string("window_title"),
+        note: note,
+        screenshot: screenshotDetail(args)
+    )
+}
+
+private func linuxElementExists(
+    in root: AXUIElement,
+    role: String?,
+    label: String?,
+    valueContains: String?,
+    depth: Int = 0
+) -> Bool {
+    if depth <= 14 {
+        let matchesRole = role.map { axRole(root).lowercased() == $0.lowercased() } ?? true
+        let query = label?.lowercased()
+        let title = axString(root, kAXTitleAttribute)?.lowercased()
+        let description = axString(root, kAXDescriptionAttribute)?.lowercased()
+        let value = axString(root, kAXValueAttribute)?.lowercased()
+        let matchesLabel = query.map {
+            (title?.contains($0) ?? false) || (description?.contains($0) ?? false)
+        } ?? true
+        let matchesValue = valueContains.map { value?.contains($0.lowercased()) ?? false } ?? true
+        if matchesRole && matchesLabel && matchesValue { return true }
+    }
+    return axElements(root, kAXChildrenAttribute).contains {
+        linuxElementExists(
+            in: $0,
+            role: role,
+            label: label,
+            valueContains: valueContains,
+            depth: depth + 1
+        )
+    }
 }
 func typeTextImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     let app = try resolveApp(args.requireString("app"))

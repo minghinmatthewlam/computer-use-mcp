@@ -66,6 +66,7 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
     )
     #else
     let process = ProcessDiagnostics.current()
+    let accessibility = linuxAccessibilityAvailable()
     return HealthReport(
         reportVersion: 1,
         version: version,
@@ -73,14 +74,20 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
         bundleIdentifier: Bundle.main.bundleIdentifier,
         process: process,
         permissions: PermissionDiagnostics(
-            accessibility: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Accessibility is unsupported on Linux"),
+            accessibility: PermissionStatus(
+                granted: accessibility,
+                status: accessibility ? "granted" : "not_available",
+                requiredFor: "AT-SPI2 accessibility bus and application trees"
+            ),
             screenRecording: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Screen Recording is unsupported on Linux")
         ),
         captureService: CaptureServiceDiagnostic(status: .skipped, detail: "Screen capture is unsupported on Linux."),
         daemon: daemonDiagnostics(),
         telemetry: telemetryDiagnostics(),
         tccAttribution: "Linux does not use TCC.",
-        recommendedNextAction: "Linux reports unsupported capabilities; use version/help/health_report for diagnostics."
+        recommendedNextAction: accessibility
+            ? "AT-SPI2 perception is available; X11 input and capture remain separate Linux engine phases."
+            : "Start an AT-SPI2 accessibility bus and enable application accessibility, then rerun health_report."
     )
     #endif
 }

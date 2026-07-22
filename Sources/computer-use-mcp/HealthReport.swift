@@ -9,6 +9,11 @@ import ScreenCaptureKit
 import Glibc
 #endif
 
+struct InputDeliveryDiagnostic: Codable, Sendable {
+    let status: String
+    let detail: String
+}
+
 func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthReport {
     #if os(macOS)
     let accessibility: Bool

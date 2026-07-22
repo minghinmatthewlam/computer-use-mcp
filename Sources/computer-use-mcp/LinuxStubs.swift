@@ -25,11 +25,6 @@ enum KeyDeliveryMode: String, Equatable {
     case globalXTest = "tier4-global-xtest"
 }
 
-struct InputDeliveryDiagnostic: Codable, Sendable {
-    let status: String
-    let detail: String
-}
-
 enum FallbackReason: String, Equatable, Sendable {
     case axActionUnsupported = "ax-action-unsupported"
     case windowNumberUnresolved = "window-number-unresolved"

@@ -13,10 +13,11 @@ server. Point Claude Code, Cursor, Codex CLI, Gemini CLI, or your own agent at i
 and the agent can **see and operate the apps on your Mac — in the background,
 without hijacking your cursor or stealing focus.**
 
-> **Status:** pre-1.0, used in production by the authors. macOS only. Runs while
-> the Mac is unlocked (the system is kept from idle-sleeping during active
-> sessions; if the screen locks, mutating tools pause with a recoverable error
-> until you unlock).
+> **Status:** pre-1.0, used in production by the authors. The interaction engine
+> runs on macOS while the Linux build, tests, CLI, and daemon plumbing are
+> supported. On macOS it runs while the Mac is unlocked (the system is kept from
+> idle-sleeping during active sessions; if the screen locks, mutating tools pause
+> with a recoverable error until you unlock).
 
 <!--
   HERO MEDIA PLACEHOLDER.
@@ -417,6 +418,8 @@ Two ways to keep large windows from blowing up the tree:
   (Input Monitoring is *not* required). Run `computer-use-mcp health_report` to
   inspect current identity/permission state, or `computer-use-mcp doctor --prompt`
   when you intentionally want macOS prompts.
+- Linux: Swift 6.0.3 for build, tests, CLI, and daemon use; no GUI permissions
+  are required.
 
 ## Safety
 
@@ -518,8 +521,9 @@ productionization checklist.
   `allow_global_cursor: true` as an explicit fallback.
 - Menu key-equivalents (e.g. `cmd+a`) are reliable when the app is the key window;
   some apps ignore them when targeted purely in the background.
-- macOS only (the engine is built on Accessibility, ScreenCaptureKit, and
-  CoreGraphics). The protocol/tool layer is OS-agnostic.
+- The interaction engine is macOS-only (Accessibility, ScreenCaptureKit, and
+  CoreGraphics). Linux tools that require those capabilities return structured
+  unsupported errors; the protocol/tool layer is OS-agnostic.
 
 ## Development
 

@@ -34,6 +34,29 @@ jobs:
         # non-mutating path.
         run: python3 scripts/preflight.py
 
+  linux-build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0.3"
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/.cache/org.swift.swiftpm
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-
+
+      - name: Preflight (Linux, no GUI/TCC)
+        run: python3 scripts/preflight.py --bin .build/debug/computer-use-mcp
+
   # Non-blocking style check: does not gate build-and-test. Prefer the
   # toolchain-bundled `swift format lint` over adding a SwiftLint dependency.
   lint:

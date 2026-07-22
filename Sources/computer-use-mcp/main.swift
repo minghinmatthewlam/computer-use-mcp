@@ -1,6 +1,9 @@
 // computer-use-mcp — entry point.
 
 import Foundation
+#if os(macOS)
+import CoreGraphics
+#endif
 
 // Establish the window-server connection on the main thread before any
 // CoreGraphics/ScreenCaptureKit call runs on a worker thread; without this,

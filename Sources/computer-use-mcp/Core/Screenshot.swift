@@ -273,17 +273,37 @@ func captureWindow(pid: pid_t, title: String?, frame: CGRect, detail: Screenshot
     }
     defer { cx11_close_display(display) }
 
-    let sourceWidth = Int(frame.width.rounded(.up))
-    let sourceHeight = Int(frame.height.rounded(.up))
+    let rootWidth = CGFloat(cx11_root_width(display))
+    let rootHeight = CGFloat(cx11_root_height(display))
+    let requestedMinX = frame.origin.x.rounded(.towardZero)
+    let requestedMinY = frame.origin.y.rounded(.towardZero)
+    let requestedMaxX = (frame.origin.x + frame.width).rounded(.up)
+    let requestedMaxY = (frame.origin.y + frame.height).rounded(.up)
+    let captureMinX = max(0, min(requestedMinX, rootWidth))
+    let captureMinY = max(0, min(requestedMinY, rootHeight))
+    let captureMaxX = max(0, min(requestedMaxX, rootWidth))
+    let captureMaxY = max(0, min(requestedMaxY, rootHeight))
+    guard captureMaxX > captureMinX, captureMaxY > captureMinY else {
+        throw ToolError.failed("The requested window frame is entirely outside the X11 screen.")
+    }
+    let sourceWidth = Int(captureMaxX - captureMinX)
+    let sourceHeight = Int(captureMaxY - captureMinY)
     var sourcePixels: UnsafeMutablePointer<UInt8>?
-    guard cx11_capture_root_rgba(
+    let captureResult = cx11_capture_root_rgba(
         display,
-        Int32(frame.origin.x.rounded()),
-        Int32(frame.origin.y.rounded()),
+        Int32(captureMinX),
+        Int32(captureMinY),
         UInt32(sourceWidth),
         UInt32(sourceHeight),
         &sourcePixels
-    ) != 0, let sourcePixels else {
+    )
+    guard captureResult != 0, let sourcePixels else {
+        if captureResult < 0 {
+            throw ToolError.failed(
+                "X11 rejected the screenshot request (error code \(-captureResult)); "
+                    + "the window may extend outside the screen."
+            )
+        }
         throw ToolError.failed("Could not capture the X11 root window at the requested frame.")
     }
     defer { cx11_free(sourcePixels) }

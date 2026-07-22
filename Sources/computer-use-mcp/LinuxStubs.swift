@@ -189,6 +189,28 @@ private func withX11Display<R>(_ body: (CX11DisplayRef) throws -> R) throws -> R
     return try body(display)
 }
 
+private func ensureLinuxX11Focus(pid: pid_t) throws {
+    try withX11Display { display in
+        let window = cx11_window_for_pid(display, UInt(pid))
+        guard window != 0 else {
+            throw ToolError.failed(
+                "Could not find an X11 window for pid \(pid); refusing to send global keyboard input."
+            )
+        }
+        guard cx11_activate_window(display, window) != 0 else {
+            throw ToolError.failed(
+                "Could not activate the X11 window for pid \(pid); refusing to send global keyboard input."
+            )
+        }
+        Thread.sleep(forTimeInterval: 0.05)
+        guard cx11_focus_matches_pid(display, UInt(pid)) != 0 else {
+            throw ToolError.failed(
+                "X11 focus did not reach the target app (pid \(pid)); refusing to send global keyboard input."
+            )
+        }
+    }
+}
+
 private func linuxX11InputAvailability(displayName: String?) -> InputDeliveryDiagnostic {
     guard let displayName, !displayName.isEmpty else {
         return InputDeliveryDiagnostic(
@@ -435,6 +457,7 @@ func typeUnicodeText(_ text: String, context: DeliveryContext) throws -> InputTi
     guard linuxInputDeliveryAvailable() else {
         throw ToolError.failed("Text input is unavailable because X11/XTest is unavailable.")
     }
+    try ensureLinuxX11Focus(pid: context.pid)
     X11State.shared.lock.lock()
     defer { X11State.shared.lock.unlock() }
     try withX11Display { display in
@@ -462,6 +485,7 @@ func deliverKey(_ chord: KeyChord, context: DeliveryContext, targetAppIsActive: 
     guard let token = linuxKeyToken(for: chord) else {
         throw ToolError.failed("Could not map the requested key to an X11 keysym.")
     }
+    try ensureLinuxX11Focus(pid: context.pid)
     try withX11Display { display in
         let modifiers = linuxModifierKeycodes(for: chord.flags, display: display)
         let keycode: KeyCode
@@ -828,15 +852,13 @@ func typeTextImpl(_ args: [String: Value]) async throws -> CallTool.Result {
         windowFrame: nil,
         allowGlobalCursor: false
     )
-    if axBool(element, kAXFocusedAttribute) != true, let frame = axFrame(element) {
+    if let frame = axFrame(element) {
         _ = try deliverClick(
             at: CGPoint(x: frame.midX, y: frame.midY),
             button: .left,
             clickCount: 1,
             context: context
         )
-    } else {
-        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     }
     let tier = try typeUnicodeText(text, context: context)
     return .text("Typed \(text.count) characters into \(described) [\(tier.rawValue)].")

@@ -87,7 +87,11 @@ func makeHealthReport(prompt: Bool, probeCaptureService: Bool) async -> HealthRe
                 status: accessibility ? "granted" : "not_available",
                 requiredFor: "AT-SPI2 accessibility bus and application trees"
             ),
-            screenRecording: PermissionStatus(granted: false, status: "unsupported", requiredFor: "Screen Recording is unsupported on Linux")
+            screenRecording: PermissionStatus(
+                granted: false,
+                status: "unsupported",
+                requiredFor: "X11 display access provides screenshots; macOS Screen Recording permission is not applicable"
+            )
         ),
         captureService: captureService,
         daemon: daemonDiagnostics(),

@@ -232,7 +232,11 @@ func scrollImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     }
 
     // Tier 2: synthetic wheel at the hit point.
+    #if os(Linux)
+    let tier = try deliverScroll(at: point, deltaX: deltaX, deltaY: deltaY, context: target.deliveryContext)
+    #else
     let tier = deliverScroll(at: point, deltaX: deltaX, deltaY: deltaY, context: target.deliveryContext)
+    #endif
     try? await Task.sleep(for: .milliseconds(80))
 
     if let container, let beforeOffset, let afterOffset = scrollOffsetSignature(container) {
@@ -283,7 +287,11 @@ func dragImpl(_ args: [String: Value]) async throws -> CallTool.Result {
         allowGlobalCursor: false
     )
     await AgentCursor.shared.glide(to: from, targetWindow: context.windowNumber)
+    #if os(Linux)
+    let tier = try await deliverDrag(from: from, to: to, context: context)
+    #else
     let tier = await deliverDrag(from: from, to: to, context: context)
+    #endif
     await AgentCursor.shared.pulse(at: to, targetWindow: context.windowNumber)
     try? await Task.sleep(for: .milliseconds(80))
 

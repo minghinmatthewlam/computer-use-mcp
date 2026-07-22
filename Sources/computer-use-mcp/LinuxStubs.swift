@@ -169,14 +169,18 @@ func deliverClick(
     at point: CGPoint, button: MouseButtonKind, clickCount: Int, context: DeliveryContext,
     allowGlobalCursor: Bool = false
 ) throws -> DeliveryOutcome {
-    DeliveryOutcome(tier: .windowManagement, fallbackReasons: [])
+    throw ToolError.notImplemented("Mouse click delivery is unsupported on Linux.")
 }
 
 @discardableResult
-func deliverScroll(at point: CGPoint, deltaX: Int, deltaY: Int, context: DeliveryContext) -> InputTier { .windowManagement }
+func deliverScroll(at point: CGPoint, deltaX: Int, deltaY: Int, context: DeliveryContext) throws -> InputTier {
+    throw ToolError.notImplemented("Scroll delivery is unsupported on Linux.")
+}
 
 @discardableResult
-func deliverDrag(from: CGPoint, to: CGPoint, context: DeliveryContext) async -> InputTier { .windowManagement }
+func deliverDrag(from: CGPoint, to: CGPoint, context: DeliveryContext) async throws -> InputTier {
+    throw ToolError.notImplemented("Drag delivery is unsupported on Linux.")
+}
 
 @discardableResult
 func typeUnicodeText(_ text: String, context: DeliveryContext) throws -> InputTier {

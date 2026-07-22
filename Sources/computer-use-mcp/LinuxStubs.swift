@@ -334,19 +334,40 @@ func jsonString(_ value: String) -> String { "\"\(value)\"" }
 
 func openClipboard() {}
 
+private actor LinuxTimeoutGate<T: Sendable> {
+    private var finished = false
+    private var continuation: CheckedContinuation<T, Error>?
+
+    init(_ continuation: CheckedContinuation<T, Error>) {
+        self.continuation = continuation
+    }
+
+    func finish(_ result: Result<T, Error>) {
+        guard !finished, let continuation else { return }
+        finished = true
+        self.continuation = nil
+        continuation.resume(with: result)
+    }
+}
+
 func withTimeout<T: Sendable>(
     seconds: Double,
     label: String,
     operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await operation() }
-        group.addTask {
-            try await Task.sleep(for: .seconds(seconds))
-            throw ToolError.failed("\(label) timed out after \(Int(seconds))s.")
+    try await withCheckedThrowingContinuation { continuation in
+        let gate = LinuxTimeoutGate(continuation)
+        Task.detached {
+            do {
+                await gate.finish(.success(try await operation()))
+            } catch {
+                await gate.finish(.failure(error))
+            }
         }
-        defer { group.cancelAll() }
-        return try await group.next()!
+        Task.detached {
+            try? await Task.sleep(for: .seconds(seconds))
+            await gate.finish(.failure(ToolError.failed("\(label) timed out after \(Int(seconds))s.")))
+        }
     }
 }
 

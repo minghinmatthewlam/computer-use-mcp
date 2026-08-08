@@ -48,6 +48,33 @@ import Testing
     #expect(aggregate.screenshotPNGBytes == MetricCounter(count: 1, total: 4096))
   }
 
+  @Test func schemaOneSummaryPreservesExistingCounters() throws {
+    let data = Data("""
+      {"schema_version":1,"updated_at":0,"events":7,"operations":4,"perceptions":3,
+      "tools":{"click":4},"app_bundle_identifiers":{},"ax_roles":{},
+      "attempted_delivery_strategies":{},"final_delivery_strategies":{},
+      "effect_outcomes":{},"queue_latency_ms":{"count":4,"total":8},
+      "execution_latency_ms":{"count":4,"total":40},
+      "perception_latency_ms":{"count":3,"total":60},
+      "elements_visited":{"count":3,"total":90},
+      "elements_returned":{"count":3,"total":30},"partial_perceptions":1,
+      "diff_perceptions":2,"context_bytes":{"count":3,"total":300}}
+      """.utf8)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+
+    let aggregate = try decoder.decode(MetricsAggregateSnapshot.self, from: data)
+
+    #expect(aggregate.schemaVersion == 2)
+    #expect(aggregate.events == 7)
+    #expect(aggregate.operations == 4)
+    #expect(aggregate.perceptions == 3)
+    #expect(aggregate.queueLatencyMs == MetricCounter(count: 4, total: 8))
+    #expect(aggregate.perceptionLatencyMs == MetricCounter(count: 3, total: 60))
+    #expect(aggregate.responseEncodings.isEmpty)
+    #expect(aggregate.textBytes == MetricCounter())
+  }
+
   @Test func recorderSerializesConcurrentWritesAndPersistsSummary() async throws {
     try await withRecorder { recorder, configuration in
       await withTaskGroup(of: Void.self) { group in

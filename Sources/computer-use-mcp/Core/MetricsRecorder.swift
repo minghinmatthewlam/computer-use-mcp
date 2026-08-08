@@ -465,6 +465,53 @@ struct MetricsAggregateSnapshot: Codable, Equatable, Sendable {
     self.updatedAt = updatedAt
   }
 
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let persistedSchema = try container.decode(Int.self, forKey: .schemaVersion)
+    guard persistedSchema == 1 || persistedSchema == 2 else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .schemaVersion, in: container,
+        debugDescription: "unsupported metrics summary schema \(persistedSchema)")
+    }
+    schemaVersion = 2
+    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    events = try container.decode(Int.self, forKey: .events)
+    operations = try container.decode(Int.self, forKey: .operations)
+    perceptions = try container.decode(Int.self, forKey: .perceptions)
+    tools = try container.decode([String: Int].self, forKey: .tools)
+    appBundleIdentifiers = try container.decode([String: Int].self, forKey: .appBundleIdentifiers)
+    axRoles = try container.decode([String: Int].self, forKey: .axRoles)
+    attemptedDeliveryStrategies = try container.decode(
+      [String: Int].self, forKey: .attemptedDeliveryStrategies)
+    finalDeliveryStrategies = try container.decode(
+      [String: Int].self, forKey: .finalDeliveryStrategies)
+    effectOutcomes = try container.decode([String: Int].self, forKey: .effectOutcomes)
+    queueLatencyMs = try container.decode(MetricCounter.self, forKey: .queueLatencyMs)
+    executionLatencyMs = try container.decode(MetricCounter.self, forKey: .executionLatencyMs)
+    perceptionLatencyMs = try container.decode(MetricCounter.self, forKey: .perceptionLatencyMs)
+    elementsVisited = try container.decode(MetricCounter.self, forKey: .elementsVisited)
+    elementsReturned = try container.decode(MetricCounter.self, forKey: .elementsReturned)
+    partialPerceptions = try container.decode(Int.self, forKey: .partialPerceptions)
+    settleLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .settleLatencyMs) ?? MetricCounter()
+    screenshotLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .screenshotLatencyMs) ?? MetricCounter()
+    snapshotLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .snapshotLatencyMs) ?? MetricCounter()
+    verificationLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .verificationLatencyMs) ?? MetricCounter()
+    responseConstructionLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .responseConstructionLatencyMs) ?? MetricCounter()
+    otherLatencyMs = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .otherLatencyMs) ?? MetricCounter()
+    responseEncodings = try container.decodeIfPresent(
+      [String: Int].self, forKey: .responseEncodings) ?? [:]
+    textBytes = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .textBytes) ?? MetricCounter()
+    screenshotPNGBytes = try container.decodeIfPresent(
+      MetricCounter.self, forKey: .screenshotPNGBytes) ?? MetricCounter()
+  }
+
   mutating func record(_ event: MetricsEvent) {
     updatedAt = event.timestamp
     events += 1

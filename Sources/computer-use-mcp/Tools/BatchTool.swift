@@ -59,11 +59,35 @@ func batchImpl(
                     + "does not emit structured success evidence. Put it last, or run the next "
                     + "dependent action in a separate call.")
         }
+        if index < rawActions.count - 1, fields["state_response_mode"] != nil {
+            throw ToolError.invalidArguments(
+                "actions[\(index)]: state_response_mode is only valid on the final batch step.")
+        }
         var arguments = fields
         arguments["tool"] = nil
         arguments["app"] = .string(appName)
+        try validateStateResponseArguments(toolName: tool, arguments: arguments)
         steps.append((tool, arguments))
     }
+
+    let last = steps[steps.count - 1]
+    var finalArguments = last.arguments
+    if let includeScreenshot = args["include_screenshot"] {
+        finalArguments["include_screenshot"] = includeScreenshot
+    }
+    if let batchMode = args.string("state_response_mode"),
+        let stepMode = finalArguments.string("state_response_mode"),
+        batchMode != stepMode
+    {
+        throw ToolError.invalidArguments(
+            "Batch state_response_mode \"\(batchMode)\" conflicts with final step state_response_mode \"\(stepMode)\".")
+    }
+    if stateResponseModeToolNames.contains(last.tool),
+        let responseMode = args["state_response_mode"]
+    {
+        finalArguments["state_response_mode"] = responseMode
+    }
+    try validateStateResponseArguments(toolName: last.tool, arguments: finalArguments)
 
     var summary: [String] = []
     var definitePriorCommit = false
@@ -87,7 +111,11 @@ func batchImpl(
         } else {
             arguments["include_state"] = .bool(false)
         }
-        let result = await dispatcher(step.tool, arguments)
+        let result = await StateResponseContext.$mode.withValue(.auto) {
+            await PerceptionMetricRecordingContext.$deferred.withValue(true) {
+                await dispatcher(step.tool, arguments)
+            }
+        }
         let text = batchResultText(result)
         if !leafResultSucceeded(result, isMutating: isMutatingTool(step.tool)) {
             if isMutatingTool(step.tool) {
@@ -96,8 +124,20 @@ func batchImpl(
                     definite: &definitePriorCommit,
                     ambiguous: &ambiguousCommit)
             }
-            return stopped(atStep: index + 1, tool: step.tool, error: text)
+            let responseConstructionStart = ContinuousClock.now
+            let stoppedResult = stopped(atStep: index + 1, tool: step.tool, error: text)
+            let leafEncoding = perceptionMetric(in: result)?.responseEncoding ?? .none
+            let addedResponseConstructionMs = perceptionDurationMilliseconds(
+                responseConstructionStart.duration(to: .now))
+            return await recordingDeferredPerceptionMetric(
+                from: result,
+                attachingTo: stoppedResult,
+                addedResponseConstructionMs: addedResponseConstructionMs,
+                replacingEncoding: leafEncoding,
+                replacingTextBytes: batchResultText(stoppedResult).utf8.count,
+                replacingScreenshotPNGBytes: 0)
         }
+        _ = await recordingDeferredPerceptionMetric(from: result)
         if isMutatingTool(step.tool) {
             updateCompositeEvidence(
                 leafCommitEvidence(result),
@@ -107,12 +147,15 @@ func batchImpl(
         summary.append("✓ step \(index + 1) \(step.tool): \(firstLine(text))")
     }
 
-    let last = steps[steps.count - 1]
-    var lastArguments = last.arguments
-    if let includeScreenshot = args["include_screenshot"] {
-        lastArguments["include_screenshot"] = includeScreenshot
+    let finalMode = args.string("state_response_mode")
+        .flatMap(StateResponseMode.init(rawValue:))
+        ?? finalArguments.string("state_response_mode").flatMap(StateResponseMode.init(rawValue:))
+        ?? .auto
+    let result = await StateResponseContext.$mode.withValue(finalMode) {
+        await PerceptionMetricRecordingContext.$deferred.withValue(true) {
+            await dispatcher(last.tool, finalArguments)
+        }
     }
-    let result = await dispatcher(last.tool, lastArguments)
     if !finalLeafResultAccepted(result) {
         if isMutatingTool(last.tool) {
             updateCompositeEvidence(
@@ -120,7 +163,19 @@ func batchImpl(
                 definite: &definitePriorCommit,
                 ambiguous: &ambiguousCommit)
         }
-        return stopped(atStep: steps.count, tool: last.tool, error: batchResultText(result))
+        let responseConstructionStart = ContinuousClock.now
+        let stoppedResult = stopped(
+            atStep: steps.count, tool: last.tool, error: batchResultText(result))
+        let leafEncoding = perceptionMetric(in: result)?.responseEncoding ?? .none
+        let addedResponseConstructionMs = perceptionDurationMilliseconds(
+            responseConstructionStart.duration(to: .now))
+        return await recordingDeferredPerceptionMetric(
+            from: result,
+            attachingTo: stoppedResult,
+            addedResponseConstructionMs: addedResponseConstructionMs,
+            replacingEncoding: leafEncoding,
+            replacingTextBytes: batchResultText(stoppedResult).utf8.count,
+            replacingScreenshotPNGBytes: 0)
     }
     if isMutatingTool(last.tool) {
         updateCompositeEvidence(
@@ -129,6 +184,7 @@ func batchImpl(
             ambiguous: &ambiguousCommit)
     }
 
+    let responseConstructionStart = ContinuousClock.now
     var header = "Batch completed \(steps.count) step(s):\n"
     header += summary.isEmpty ? "" : summary.joined(separator: "\n") + "\n"
     header += "✓ step \(steps.count) \(last.tool) — final state below.\n\n"
@@ -142,10 +198,16 @@ func batchImpl(
     // The final leaf's metadata describes only that leaf. Always merge prior
     // composite evidence so a successful no-op/unknown tail cannot erase an
     // earlier committed or ambiguous mutation.
-    return applyingSuccessfulCompositeCommitEvidence(
+    let composite = applyingSuccessfulCompositeCommitEvidence(
         to: completed,
         definiteCommit: definitePriorCommit,
         ambiguousCommit: ambiguousCommit)
+    let addedResponseConstructionMs = perceptionDurationMilliseconds(
+        responseConstructionStart.duration(to: .now))
+    return await recordingDeferredPerceptionMetric(
+        from: composite,
+        addedTextBytes: header.utf8.count,
+        addedResponseConstructionMs: addedResponseConstructionMs)
 }
 
 func batchStoppedResult(

@@ -142,6 +142,68 @@ func screenshotDetail(_ args: [String: Value]) -> ScreenshotDetail {
     return args.bool("include_screenshot") == false ? .none : .reduced
 }
 
+enum StateResponseMode: String, Sendable {
+    case auto
+    case full
+}
+
+enum StateResponseContext {
+    @TaskLocal static var mode: StateResponseMode = .auto
+}
+
+let stateResponseModeToolNames: Set<String> = [
+    "click", "type_text", "press_key", "scroll", "drag", "set_value",
+    "select_text", "perform_secondary_action", "click_menu_item", "page", "batch",
+]
+
+func validateStateResponseArguments(toolName: String, arguments: [String: Value]) throws {
+    guard let rawMode = arguments["state_response_mode"] else { return }
+    guard stateResponseModeToolNames.contains(toolName) else {
+        throw ToolError.invalidArguments("\"state_response_mode\" is not supported by \"\(toolName)\".")
+    }
+    guard let mode = rawMode.stringValue, StateResponseMode(rawValue: mode) != nil else {
+        throw ToolError.invalidArguments("\"state_response_mode\" must be \"auto\" or \"full\".")
+    }
+    guard arguments.bool("include_state") != false else {
+        throw ToolError.invalidArguments(
+            "\"state_response_mode\" cannot be used with \"include_state\": false because no state is returned.")
+    }
+}
+
+func stateResponseMode(_ args: [String: Value]) -> StateResponseMode {
+    args.string("state_response_mode").flatMap(StateResponseMode.init(rawValue:)) ?? .auto
+}
+
+func selectedStateResponseEncoding(
+    unchanged: Bool,
+    hasCompactDiff: Bool,
+    detail: ScreenshotDetail,
+    mode: StateResponseMode
+) -> StateResponseEncoding {
+    if detail == .noState { return .none }
+    if mode == .full || detail == .full { return .full }
+    if unchanged { return .unchanged }
+    return hasCompactDiff ? .diff : .full
+}
+
+func perceptionDurationMilliseconds(_ duration: Duration) -> Int64 {
+    max(
+        0,
+        duration.components.seconds * 1000
+            + duration.components.attoseconds / 1_000_000_000_000_000)
+}
+
+func exclusiveOtherMilliseconds(
+    total: Int64,
+    settle: Int64,
+    screenshot: Int64,
+    snapshot: Int64,
+    verification: Int64,
+    responseConstruction: Int64
+) -> Int64 {
+    max(0, total - settle - screenshot - snapshot - verification - responseConstruction)
+}
+
 /// Build the canonical app-state result: accessibility tree (with element ids
 /// and screenshot-pixel bounding boxes) plus a screenshot of the target
 /// window. Persists the snapshot so element ids resolve in later calls.
@@ -157,9 +219,15 @@ func stateResult(
     skeleton: Bool = false,
     focusTelemetry: FocusTelemetry? = nil,
     verifier: ActionVerifier? = nil,
-    metricTool: String = "state_result"
+    metricTool: String = "state_result",
+    responseMode: StateResponseMode? = nil
 ) async throws -> CallTool.Result {
     let metricStart = ContinuousClock.now
+    var settleMs: Int64 = 0
+    var screenshotMs: Int64 = 0
+    var snapshotMs: Int64 = 0
+    var verificationMs: Int64 = 0
+    var responseConstructionMs: Int64 = 0
     try requireAccessibilityTrusted()
     var handlerTelemetry = focusTelemetry
     handlerTelemetry?.dispatchSucceeded = verifier?.dispatchSucceeded
@@ -169,6 +237,7 @@ func stateResult(
     await AgentCursor.shared.keepAlive()
 
     if detail == .noState {
+        let responseStart = ContinuousClock.now
         let confirmation = note ?? "Action completed."
         var result = CallTool.Result.text(confirmation + " Call get_app_state when you need the updated UI state.")
             .withFocusTelemetry(handlerTelemetry)
@@ -178,11 +247,29 @@ func stateResult(
         if let verifier {
             result = result.withActionOutcome(verifier.skippedStateOutcome())
         }
-        return result
+        responseConstructionMs += perceptionDurationMilliseconds(responseStart.duration(to: .now))
+        return await recordingPerceptionMetric(
+            result: result,
+            operationStart: metricStart,
+            tool: metricTool,
+            appBundleIdentifier: app.bundleIdentifier,
+            settleMs: settleMs,
+            screenshotMs: screenshotMs,
+            snapshotMs: snapshotMs,
+            verificationMs: verificationMs,
+            responseConstructionMs: responseConstructionMs,
+            elementsVisited: 0,
+            elementsReturned: 0,
+            partial: false,
+            responseEncoding: .none,
+            textBytes: (confirmation + " Call get_app_state when you need the updated UI state.").utf8.count,
+            screenshotPNGBytes: 0)
     }
 
     // Give the UI a brief beat to settle after whatever just happened.
+    let settleStart = ContinuousClock.now
     try? await Task.sleep(for: .milliseconds(40))
+    settleMs += perceptionDurationMilliseconds(settleStart.duration(to: .now))
 
     // Mutation callers carry the exact acted-on window id through the reread.
     // If that window disappeared, fail without capturing or persisting a
@@ -194,15 +281,33 @@ func stateResult(
             window = try targetWindow(for: app, snapshotWindowID: requestedWindowID)
         } catch {
             let confirmation = note ?? "Action completed."
-            var result = CallTool.Result.text(
+            let responseStart = ContinuousClock.now
+            let text =
                 confirmation + "\n\nThe exact acted-on window (id \(requestedWindowID)) "
                     + "is no longer available, so no replacement window was captured. "
-                    + "Call get_app_state when you need the current UI state.")
+                    + "Call get_app_state when you need the current UI state."
+            var result = CallTool.Result.text(text)
                 .withFocusTelemetry(handlerTelemetry)
             if let verifier {
                 result = result.withActionOutcome(verifier.missingWindowOutcome())
             }
-            return result
+            responseConstructionMs += perceptionDurationMilliseconds(responseStart.duration(to: .now))
+            return await recordingPerceptionMetric(
+                result: result,
+                operationStart: metricStart,
+                tool: metricTool,
+                appBundleIdentifier: app.bundleIdentifier,
+                settleMs: settleMs,
+                screenshotMs: screenshotMs,
+                snapshotMs: snapshotMs,
+                verificationMs: verificationMs,
+                responseConstructionMs: responseConstructionMs,
+                elementsVisited: 0,
+                elementsReturned: 0,
+                partial: false,
+                responseEncoding: .none,
+                textBytes: text.utf8.count,
+                screenshotPNGBytes: 0)
         }
     } else {
         do {
@@ -217,6 +322,7 @@ func stateResult(
     var capture: WindowCapture?
     var captureNote: String?
     if detail != .none {
+        let screenshotStart = ContinuousClock.now
         do {
             capture = try await captureWindow(
                 pid: app.pid, windowID: exactWindowID, title: window.title,
@@ -224,6 +330,7 @@ func stateResult(
         } catch {
             captureNote = "Screenshot unavailable: \(error)"
         }
+        screenshotMs += perceptionDurationMilliseconds(screenshotStart.duration(to: .now))
     }
 
     // Guard both terms: a degenerate capture or zero-width window must not
@@ -271,7 +378,9 @@ func stateResult(
         }
     }
 
+    let initialSnapshotStart = ContinuousClock.now
     var (snapshot, tree, unchanged, diff) = await captureSnapshot()
+    snapshotMs += perceptionDurationMilliseconds(initialSnapshotStart.duration(to: .now))
     var webAXUnsupported = false
     var webContentNotMaterialized = false
     let emptyWebArea = hasEmptyWebArea(tree.elements)
@@ -291,13 +400,21 @@ func stateResult(
         if outcome == .applied || (outcome == .alreadyApplied && (emptyWebArea || coldStartWebContent)) {
             let delays = webMaterializationRetryBackoff(coldStartShape: coldStartWebContent || emptyWebArea)
             if delays.isEmpty {
+                let webSettleStart = ContinuousClock.now
                 try? await Task.sleep(for: .milliseconds(500))
+                settleMs += perceptionDurationMilliseconds(webSettleStart.duration(to: .now))
+                let retrySnapshotStart = ContinuousClock.now
                 (snapshot, tree, unchanged, diff) = await captureSnapshot()
+                snapshotMs += perceptionDurationMilliseconds(retrySnapshotStart.duration(to: .now))
             } else {
-                for milliseconds in delays {
+                for delayMilliseconds in delays {
                     guard hasColdStartWebContentShape(tree.elements) else { break }
-                    try? await Task.sleep(for: .milliseconds(milliseconds))
+                    let webSettleStart = ContinuousClock.now
+                    try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+                    settleMs += perceptionDurationMilliseconds(webSettleStart.duration(to: .now))
+                    let retrySnapshotStart = ContinuousClock.now
                     (snapshot, tree, unchanged, diff) = await captureSnapshot()
+                    snapshotMs += perceptionDurationMilliseconds(retrySnapshotStart.duration(to: .now))
                 }
                 webContentNotMaterialized = hasColdStartWebContentShape(tree.elements)
             }
@@ -306,6 +423,7 @@ func stateResult(
         }
     }
 
+    var responseStart = ContinuousClock.now
     var text = ""
     if let note {
         text += note + "\n\n"
@@ -332,11 +450,16 @@ func stateResult(
     // perception (get_app_state, .full) always returns it. A changed tree
     // whose diff is compact is sent as the diff — surviving elements carried
     // their ids over, so everything the agent holds stays valid.
-    if unchanged && detail != .full {
+    let responseEncoding = selectedStateResponseEncoding(
+        unchanged: unchanged,
+        hasCompactDiff: diff?.isCompact == true,
+        detail: detail,
+        mode: responseMode ?? StateResponseContext.mode)
+    if responseEncoding == .unchanged {
         text +=
             "UI tree unchanged by this action: element ids from generation "
             + "\(snapshot.generation) remain valid, reuse them."
-    } else if detail != .full, let diff, diff.isCompact {
+    } else if responseEncoding == .diff, let diff {
         text +=
             "Changed since the last state (~ changed, + added, - removed; "
             + "all other element ids remain valid):\n"
@@ -348,9 +471,11 @@ func stateResult(
 
     if ocr {
         if let capture {
+            responseConstructionMs += perceptionDurationMilliseconds(responseStart.duration(to: .now))
             let lines = (try? await recognizeText(
                 inPNG: capture.pngData, pixelWidth: capture.pixelWidth, pixelHeight: capture.pixelHeight
             )) ?? []
+            responseStart = .now
             text += "\n\nOCR text (x,y,w,h in screenshot pixels; click by coordinates):\n"
             text += lines.isEmpty
                 ? "(no text recognized)"
@@ -373,14 +498,18 @@ func stateResult(
 
     var enrichedTelemetry = handlerTelemetry
     enrichedTelemetry?.uiChanged = !unchanged
+    responseConstructionMs += perceptionDurationMilliseconds(responseStart.duration(to: .now))
 
     // Re-read the acted-on element and reduce to an outcome. The reread never
     // throws — a failure degrades the classification, never the tool call.
     var actionOutcome: ActionOutcome?
     if let verifier {
+        let verificationStart = ContinuousClock.now
         actionOutcome = await verifier.finalize(
             windowElement: window.element, treeChanged: !unchanged, diff: diff, afterWindowTitle: window.title)
+        verificationMs += perceptionDurationMilliseconds(verificationStart.duration(to: .now))
     }
+    let responseFinalizeStart = ContinuousClock.now
     if let sentence = actionOutcome?.humanSentence {
         // A verified non-success verdict, in plain language for the transcript.
         text += "\n\n" + sentence
@@ -405,26 +534,73 @@ func stateResult(
     let result = CallTool.Result(content: content, isError: false)
         .withFocusTelemetry(enrichedTelemetry)
         .withActionOutcome(actionOutcome)
-    let elapsed = metricStart.duration(to: .now)
-    let elapsedMilliseconds =
-        elapsed.components.seconds * 1000
-        + elapsed.components.attoseconds / 1_000_000_000_000_000
+    responseConstructionMs += perceptionDurationMilliseconds(responseFinalizeStart.duration(to: .now))
+    return await recordingPerceptionMetric(
+        result: result,
+        operationStart: metricStart,
+        tool: metricTool,
+        appBundleIdentifier: app.bundleIdentifier,
+        settleMs: settleMs,
+        screenshotMs: screenshotMs,
+        snapshotMs: snapshotMs,
+        verificationMs: verificationMs,
+        responseConstructionMs: responseConstructionMs,
+        elementsVisited: tree.elementsVisited,
+        elementsReturned: tree.elements.count,
+        partial: tree.isPartial,
+        responseEncoding: responseEncoding,
+        textBytes: text.utf8.count,
+        screenshotPNGBytes: capture?.pngData.count ?? 0)
+}
+
+private func recordingPerceptionMetric(
+    result: CallTool.Result,
+    operationStart: ContinuousClock.Instant,
+    tool: String,
+    appBundleIdentifier: String?,
+    settleMs: Int64,
+    screenshotMs: Int64,
+    snapshotMs: Int64,
+    verificationMs: Int64,
+    responseConstructionMs: Int64,
+    elementsVisited: Int,
+    elementsReturned: Int,
+    partial: Bool,
+    responseEncoding: StateResponseEncoding,
+    textBytes: Int,
+    screenshotPNGBytes: Int
+) async -> CallTool.Result {
+    let perceptionMs = perceptionDurationMilliseconds(operationStart.duration(to: .now))
     let operationID =
         ActionTransactionContext.currentOperationID
         ?? DaemonSessionContext.operationID
         ?? UUID()
     let metric = PerceptionMetric(
         operation: operationID.uuidString,
-        tool: metricTool,
-        appBundleIdentifier: app.bundleIdentifier,
-        elapsedMs: elapsedMilliseconds,
-        elementsVisited: tree.elementsVisited,
-        elementsReturned: tree.elements.count,
-        partial: tree.isPartial,
-        diff: diff != nil,
-        contextBytes: text.utf8.count
-    )
-    await MetricsRecorder.shared.record(MetricsEvent(payload: .perception(metric)))
+        tool: tool,
+        appBundleIdentifier: appBundleIdentifier,
+        perceptionMs: perceptionMs,
+        settleMs: settleMs,
+        screenshotMs: screenshotMs,
+        snapshotMs: snapshotMs,
+        verificationMs: verificationMs,
+        responseConstructionMs: responseConstructionMs,
+        otherMs: exclusiveOtherMilliseconds(
+            total: perceptionMs,
+            settle: settleMs,
+            screenshot: screenshotMs,
+            snapshot: snapshotMs,
+            verification: verificationMs,
+            responseConstruction: responseConstructionMs),
+        elementsVisited: elementsVisited,
+        elementsReturned: elementsReturned,
+        partial: partial,
+        responseEncoding: responseEncoding,
+        textBytes: textBytes,
+        screenshotPNGBytes: screenshotPNGBytes)
+    if !PerceptionMetricRecordingContext.deferred {
+        await MetricsRecorder.shared.record(MetricsEvent(payload: .perception(metric)))
+    }
     return result.withPerceptionMetric(metric)
 }
 

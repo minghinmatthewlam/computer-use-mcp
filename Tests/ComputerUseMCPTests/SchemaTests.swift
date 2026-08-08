@@ -34,6 +34,14 @@ private func schemaType(_ value: Value) throws -> String {
     return type
 }
 
+private func schemaEnum(_ value: Value) throws -> [String] {
+    let object = try objectValue(value)
+    guard case let .array(values)? = object["enum"] else {
+        throw ToolError.failed("Schema property is missing enum values.")
+    }
+    return values.compactMap(\.stringValue)
+}
+
 private func requiredProperties(for toolName: String) throws -> [String] {
     let schema = try objectValue(try toolSpec(toolName).inputSchema)
     guard case let .array(required)? = schema["required"] else {
@@ -101,6 +109,15 @@ private func requiredProperties(for toolName: String) throws -> [String] {
 
     @Test func getAppStateExposesScreenshotOptOut() throws {
         #expect(try schemaType(schemaProperty("include_screenshot", in: "get_app_state")) == "boolean")
+    }
+
+    @Test func stateReturningMutationToolsExposeResponseMode() throws {
+        for toolName in stateResponseModeToolNames.sorted() {
+            #expect(
+                try schemaEnum(schemaProperty("state_response_mode", in: toolName))
+                    == ["auto", "full"],
+                "\(toolName) must expose the shared state response mode enum")
+        }
     }
 
     @Test func manageWindowKeepsRequiredContractNarrow() throws {

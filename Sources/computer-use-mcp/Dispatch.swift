@@ -41,6 +41,11 @@ func dispatchTool(name: String, arguments: [String: Value]) async -> CallTool.Re
     guard let spec = toolCatalog.first(where: { $0.name == name }) else {
         return .text("Unknown tool: \(name)", isError: true)
     }
+    do {
+        try validateStateResponseArguments(toolName: name, arguments: arguments)
+    } catch {
+        return codedErrorResult("\(error)", code: toolErrorCode(for: error))
+    }
     await RateLimiter.shared.acquire()
     let start = ContinuousClock.now
     await SleepAssertion.shared.noteActivity()
@@ -81,14 +86,20 @@ func dispatchTool(name: String, arguments: [String: Value]) async -> CallTool.Re
     if var active = transaction {
         try? active.advance(to: .before)
         transaction = active
-        result = await DeliveryBoundaryContext.$tracker.withValue(deliveryBoundary) {
-            await ActionTransactionContext.withCurrentOperation(active) {
-                do {
-                    return try await spec.handler(arguments)
-                } catch {
-                    let classified = handlerErrorResult(error)
-                    cancelledBeforeDelivery = classified.preDeliveryCancellation
-                    return classified.result
+        let mode =
+            arguments["state_response_mode"] == nil
+            ? StateResponseContext.mode
+            : stateResponseMode(arguments)
+        result = await StateResponseContext.$mode.withValue(mode) {
+            await DeliveryBoundaryContext.$tracker.withValue(deliveryBoundary) {
+                await ActionTransactionContext.withCurrentOperation(active) {
+                    do {
+                        return try await spec.handler(arguments)
+                    } catch {
+                        let classified = handlerErrorResult(error)
+                        cancelledBeforeDelivery = classified.preDeliveryCancellation
+                        return classified.result
+                    }
                 }
             }
         }

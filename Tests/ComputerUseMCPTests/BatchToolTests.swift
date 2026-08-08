@@ -116,6 +116,186 @@ import Testing
         #expect(calls[1].bool("include_screenshot") == false)
     }
 
+    @Test func responseModeIsForwardedOnlyToFinalModeAwareStep() async throws {
+        let committed = leafResult(
+            outcome: .success("verified"), dispatched: true, commit: .committed)
+        let probe = BatchDispatchProbe(results: [committed, committed])
+        var arguments = batchArguments(tools: ["type_text", "click"])
+        arguments["state_response_mode"] = .string("full")
+
+        _ = try await batchImpl(
+            arguments,
+            dispatcher: { name, arguments in
+                await probe.dispatch(name: name, arguments: arguments)
+            })
+
+        let calls = await probe.recordedArguments
+        #expect(calls[0]["state_response_mode"] == nil)
+        #expect(calls[1].string("state_response_mode") == "full")
+    }
+
+    @Test func invalidFinalResponseModeCombinationFailsBeforeAnyStepRuns() async {
+        let probe = BatchDispatchProbe(results: [.text("must not run")])
+        var arguments = batchArguments(tools: ["type_text", "click"])
+        arguments["state_response_mode"] = .string("full")
+        guard case .array(var actions)? = arguments["actions"],
+            case .object(var final)? = actions.last
+        else {
+            Issue.record("Expected batch actions")
+            return
+        }
+        final["include_state"] = .bool(false)
+        actions[actions.count - 1] = .object(final)
+        arguments["actions"] = .array(actions)
+
+        await #expect(throws: ToolError.self) {
+            _ = try await batchImpl(
+                arguments,
+                dispatcher: { name, arguments in
+                    await probe.dispatch(name: name, arguments: arguments)
+                })
+        }
+        #expect(await probe.callCount == 0)
+    }
+
+    @Test func conflictingExplicitResponseModesFailBeforeAnyStepRuns() async {
+        let probe = BatchDispatchProbe(results: [.text("must not run")])
+        var arguments = batchArguments(tools: ["type_text", "click"])
+        arguments["state_response_mode"] = .string("full")
+        guard case .array(var actions)? = arguments["actions"],
+            case .object(var final)? = actions.last
+        else {
+            Issue.record("Expected batch actions")
+            return
+        }
+        final["state_response_mode"] = .string("auto")
+        actions[actions.count - 1] = .object(final)
+        arguments["actions"] = .array(actions)
+
+        await #expect(throws: ToolError.self) {
+            _ = try await batchImpl(
+                arguments,
+                dispatcher: { name, arguments in
+                    await probe.dispatch(name: name, arguments: arguments)
+                })
+        }
+        #expect(await probe.callCount == 0)
+    }
+
+    @Test func completedBatchAdjustsFinalPerceptionPayloadBytes() async throws {
+        let metric = batchPerceptionMetric(encoding: .full, screenshotPNGBytes: 100)
+        let leaf = leafResult(
+            outcome: .success("done"), dispatched: true, commit: .committed)
+            .withPerceptionMetric(metric)
+        let probe = BatchDispatchProbe(results: [leaf])
+
+        let result = try await batchImpl(
+            batchArguments(tools: ["click"]),
+            dispatcher: { name, arguments in
+                await probe.dispatch(name: name, arguments: arguments)
+            })
+
+        guard let adjusted = perceptionMetric(in: result) else {
+            Issue.record("Expected adjusted perception metric")
+            return
+        }
+        let actualTextBytes = batchResultText(result).utf8.count
+        #expect(adjusted.textBytes == actualTextBytes)
+        #expect(adjusted.screenshotPNGBytes == 100)
+        #expect(adjusted.responseEncoding == .full)
+        #expect(adjusted.responseConstructionMs >= metric.responseConstructionMs)
+        #expect(adjusted.perceptionMs - metric.perceptionMs
+            == adjusted.responseConstructionMs - metric.responseConstructionMs)
+    }
+
+    @Test func stoppedBatchReplacesDeferredMetricWithActualErrorResponseShape() async throws {
+        let metric = batchPerceptionMetric(encoding: .full, screenshotPNGBytes: 100)
+        let leaf = leafResult(
+            outcome: .effectNotVerified(.verification, "failed"),
+            dispatched: true,
+            commit: .unknown)
+            .withPerceptionMetric(metric)
+        let probe = BatchDispatchProbe(results: [leaf])
+
+        let result = try await batchImpl(
+            batchArguments(tools: ["click"]),
+            dispatcher: { name, arguments in
+                await probe.dispatch(name: name, arguments: arguments)
+            })
+
+        #expect(result.isError == true)
+        guard let adjusted = perceptionMetric(in: result) else {
+            Issue.record("Expected adjusted perception metric")
+            return
+        }
+        #expect(adjusted.responseEncoding == .full)
+        #expect(adjusted.textBytes == batchResultText(result).utf8.count)
+        #expect(adjusted.screenshotPNGBytes == 0)
+        #expect(adjusted.elementsReturned == 8)
+    }
+
+    @Test func failingIntermediateReplacesDeferredMetricWithActualStoppedResponse() async throws {
+        let metric = batchPerceptionMetric(encoding: .diff, screenshotPNGBytes: 0)
+        let failed = leafResult(
+            outcome: .effectNotVerified(.verification, "failed"),
+            dispatched: true,
+            commit: .unknown)
+            .withPerceptionMetric(metric)
+        let probe = BatchDispatchProbe(results: [failed, .text("must not run")])
+
+        let result = try await batchImpl(
+            batchArguments(tools: ["type_text", "click"]),
+            dispatcher: { name, arguments in
+                await probe.dispatch(name: name, arguments: arguments)
+            })
+
+        #expect(await probe.callCount == 1)
+        guard let adjusted = perceptionMetric(in: result) else {
+            Issue.record("Expected adjusted perception metric")
+            return
+        }
+        #expect(adjusted.responseEncoding == .diff)
+        #expect(adjusted.textBytes == batchResultText(result).utf8.count)
+        #expect(adjusted.elementsReturned == 8)
+    }
+
+    @Test func batchUsesAutoForIntermediateStateAndFullForAnyFinalStateTool() async throws {
+        let probe = BatchDispatchProbe(results: [.text("ready"), .text("managed")])
+        var arguments = batchArguments(tools: ["wait_for", "manage_window"])
+        arguments["state_response_mode"] = .string("full")
+
+        _ = try await batchImpl(
+            arguments,
+            dispatcher: { name, arguments in
+                await probe.dispatch(name: name, arguments: arguments)
+            })
+
+        #expect(await probe.recordedModes == [.auto, .full])
+    }
+
+    @Test func intermediateStepCannotRequestResponseMode() async {
+        let probe = BatchDispatchProbe(results: [.text("must not run")])
+        var arguments = batchArguments(tools: ["wait_for", "click"])
+        guard case .array(var actions)? = arguments["actions"],
+            case .object(var first)? = actions.first
+        else {
+            Issue.record("Expected batch actions")
+            return
+        }
+        first["state_response_mode"] = .string("full")
+        actions[0] = .object(first)
+        arguments["actions"] = .array(actions)
+
+        await #expect(throws: ToolError.self) {
+            _ = try await batchImpl(
+                arguments,
+                dispatcher: { name, arguments in
+                    await probe.dispatch(name: name, arguments: arguments)
+                })
+        }
+        #expect(await probe.callCount == 0)
+    }
+
     @Test func mutationWithoutSuccessEvidenceStopsButLegacyReadOnlyAdvances() async throws {
         let unknownMutation = CallTool.Result.text("key posted")
             .mergingMetaField(
@@ -240,6 +420,7 @@ private actor BatchDispatchProbe {
     private var results: [CallTool.Result]
     private(set) var callCount = 0
     private(set) var recordedArguments: [[String: Value]] = []
+    private(set) var recordedModes: [StateResponseMode] = []
 
     init(results: [CallTool.Result]) {
         self.results = results
@@ -247,6 +428,7 @@ private actor BatchDispatchProbe {
 
     func dispatch(name _: String, arguments: [String: Value]) -> CallTool.Result {
         recordedArguments.append(arguments)
+        recordedModes.append(StateResponseContext.mode)
         defer { callCount += 1 }
         return results[min(callCount, results.count - 1)]
     }
@@ -276,6 +458,29 @@ private func leafResult(
         .mergingMetaField(
             actionTransactionMetaKey,
             .object(["commit_status": .string(commit.rawValue)]))
+}
+
+private func batchPerceptionMetric(
+    encoding: StateResponseEncoding,
+    screenshotPNGBytes: Int
+) -> PerceptionMetric {
+    PerceptionMetric(
+        operation: "operation-1",
+        tool: "state_result",
+        appBundleIdentifier: "com.example.fixture",
+        perceptionMs: 20,
+        settleMs: 4,
+        screenshotMs: screenshotPNGBytes == 0 ? 0 : 3,
+        snapshotMs: 5,
+        verificationMs: 2,
+        responseConstructionMs: 1,
+        otherMs: screenshotPNGBytes == 0 ? 8 : 5,
+        elementsVisited: 10,
+        elementsReturned: 8,
+        partial: false,
+        responseEncoding: encoding,
+        textBytes: 4,
+        screenshotPNGBytes: screenshotPNGBytes)
 }
 
 private func errorMessage(_ body: () async throws -> Void) async -> String {

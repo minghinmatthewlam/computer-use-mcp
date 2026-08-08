@@ -60,6 +60,13 @@ private let includeStateParam = boolParam(
         + "The fastest mode for chained actions; call get_app_state when you need state again."
 )
 
+private let stateResponseModeParam = enumParam(
+    ["auto", "full"],
+    "Controls returned state text only. auto (default) returns unchanged, compact diff, or full tree "
+        + "using normal selection; full always returns the full tree. Screenshot capture and state "
+        + "generation are unchanged. Cannot be used with include_state:false."
+)
+
 private let readOnlyLocalAnnotations = Tool.Annotations(
     readOnlyHint: true,
     destructiveHint: false,
@@ -223,6 +230,7 @@ let toolCatalog: [ToolSpec] = [
                 "allow_focus_change": allowFocusChangeParam,
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app"]
@@ -244,6 +252,7 @@ let toolCatalog: [ToolSpec] = [
                 "text": stringParam("Literal text to type. Maximum \(ArgumentBounds.maxTypeTextCharacters) characters."),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "text"]
@@ -269,6 +278,7 @@ let toolCatalog: [ToolSpec] = [
                 "allow_focus_change": allowFocusChangeParam,
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "key"]
@@ -304,6 +314,7 @@ let toolCatalog: [ToolSpec] = [
                 ),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app"]
@@ -327,6 +338,7 @@ let toolCatalog: [ToolSpec] = [
                 "to_y": numberParam("End Y pixel coordinate in the latest screenshot."),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "from_x", "from_y", "to_x", "to_y"]
@@ -351,6 +363,7 @@ let toolCatalog: [ToolSpec] = [
                 ),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "element_id", "value"]
@@ -377,6 +390,7 @@ let toolCatalog: [ToolSpec] = [
                 ),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
             ],
             required: ["app", "element_id", "text"]
         ),
@@ -404,6 +418,7 @@ let toolCatalog: [ToolSpec] = [
                 ),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "element_id"]
@@ -518,6 +533,7 @@ let toolCatalog: [ToolSpec] = [
                 "path": stringParam("Menu path with \" > \" separators, e.g. \"File > Save\"."),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "path"]
@@ -556,6 +572,7 @@ let toolCatalog: [ToolSpec] = [
                 ),
                 "include_screenshot": includeScreenshotParam,
                 "include_state": includeStateParam,
+                "state_response_mode": stateResponseModeParam,
                 "confirm": confirmParam,
             ],
             required: ["app", "selector"]
@@ -698,6 +715,7 @@ let toolCatalog: [ToolSpec] = [
                     ]),
                 ]),
                 "include_screenshot": includeScreenshotParam,
+                "state_response_mode": stateResponseModeParam,
             ],
             required: ["app", "actions"]
         ),

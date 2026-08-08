@@ -34,11 +34,18 @@ import Testing
     #expect(aggregate.queueLatencyMs == MetricCounter(count: 1, total: 3))
     #expect(aggregate.executionLatencyMs == MetricCounter(count: 1, total: 11))
     #expect(aggregate.perceptionLatencyMs == MetricCounter(count: 1, total: 22))
+    #expect(aggregate.settleLatencyMs == MetricCounter(count: 1, total: 4))
+    #expect(aggregate.screenshotLatencyMs == MetricCounter(count: 1, total: 5))
+    #expect(aggregate.snapshotLatencyMs == MetricCounter(count: 1, total: 6))
+    #expect(aggregate.verificationLatencyMs == MetricCounter(count: 1, total: 2))
+    #expect(aggregate.responseConstructionLatencyMs == MetricCounter(count: 1, total: 3))
+    #expect(aggregate.otherLatencyMs == MetricCounter(count: 1, total: 2))
     #expect(aggregate.elementsVisited == MetricCounter(count: 1, total: 50))
     #expect(aggregate.elementsReturned == MetricCounter(count: 1, total: 20))
     #expect(aggregate.partialPerceptions == 1)
-    #expect(aggregate.diffPerceptions == 1)
-    #expect(aggregate.contextBytes == MetricCounter(count: 1, total: 2048))
+    #expect(aggregate.responseEncodings == ["diff": 1])
+    #expect(aggregate.textBytes == MetricCounter(count: 1, total: 2048))
+    #expect(aggregate.screenshotPNGBytes == MetricCounter(count: 1, total: 4096))
   }
 
   @Test func recorderSerializesConcurrentWritesAndPersistsSummary() async throws {
@@ -200,7 +207,7 @@ import Testing
       Issue.record("Missing metrics envelope")
       return
     }
-    #expect(envelope["schema_version"] == .int(1))
+    #expect(envelope["schema_version"] == .int(2))
     #expect(envelope["operation"] == operationMetric().value)
     #expect(envelope["perception"] == nil)
     #expect(result.content == original.content)
@@ -213,9 +220,25 @@ import Testing
       Issue.record("Missing metrics envelope")
       return
     }
-    #expect(envelope["schema_version"] == .int(1))
+    #expect(envelope["schema_version"] == .int(2))
     #expect(envelope["operation"] == nil)
     #expect(envelope["perception"] == perceptionMetric().value)
+  }
+
+  @Test func perceptionMetadataReportsActualEncodingAndSeparatePayloadBytes() {
+    guard case .object(let fields) = perceptionMetric().value else {
+      Issue.record("Expected perception metric object")
+      return
+    }
+    #expect(fields["response_encoding"] == .string("diff"))
+    #expect(fields["text_bytes"] == .int(2048))
+    #expect(fields["screenshot_png_bytes"] == .int(4096))
+    #expect(fields["diff"] == nil)
+    #expect(fields["context_bytes"] == nil)
+  }
+
+  @Test func perceptionMetricRoundTripsThroughMetadataValue() {
+    #expect(PerceptionMetric(value: perceptionMetric().value) == perceptionMetric())
   }
 
   @Test func addingOperationMetricPreservesPerceptionMetric() {
@@ -230,7 +253,7 @@ import Testing
       Issue.record("Missing metrics envelope")
       return
     }
-    #expect(envelope["schema_version"] == .int(1))
+    #expect(envelope["schema_version"] == .int(2))
     #expect(envelope["operation"] == operationMetric().value)
     #expect(envelope["perception"] == perceptionMetric().value)
     #expect(result._meta?["unrelated"] == .string("preserve-me"))
@@ -405,12 +428,19 @@ private func perceptionEvent(index: Int) -> MetricsEvent {
         operation: "snapshot",
         tool: "get_app_state",
         appBundleIdentifier: "com.example.fixture",
-        elapsedMs: 22,
+        perceptionMs: 22,
+        settleMs: 4,
+        screenshotMs: 5,
+        snapshotMs: 6,
+        verificationMs: 2,
+        responseConstructionMs: 3,
+        otherMs: 2,
         elementsVisited: 50,
         elementsReturned: 20,
         partial: true,
-        diff: true,
-        contextBytes: 2048
+        responseEncoding: .diff,
+        textBytes: 2048,
+        screenshotPNGBytes: 4096
       )))
 }
 
@@ -433,11 +463,18 @@ private func perceptionMetric() -> PerceptionMetric {
     operation: "operation-1",
     tool: "get_app_state",
     appBundleIdentifier: "com.example.fixture",
-    elapsedMs: 22,
+    perceptionMs: 22,
+    settleMs: 4,
+    screenshotMs: 5,
+    snapshotMs: 6,
+    verificationMs: 2,
+    responseConstructionMs: 3,
+    otherMs: 2,
     elementsVisited: 50,
     elementsReturned: 20,
     partial: true,
-    diff: true,
-    contextBytes: 2048
+    responseEncoding: .diff,
+    textBytes: 2048,
+    screenshotPNGBytes: 4096
   )
 }

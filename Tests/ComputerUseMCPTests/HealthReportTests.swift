@@ -127,12 +127,19 @@ private func outcomeFields(in result: CallTool.Result) throws -> [String: Value]
                         operation: "snapshot",
                         tool: "get_app_state",
                         appBundleIdentifier: "com.example.fixture",
-                        elapsedMs: 12,
+                        perceptionMs: 12,
+                        settleMs: 1,
+                        screenshotMs: 2,
+                        snapshotMs: 3,
+                        verificationMs: 1,
+                        responseConstructionMs: 1,
+                        otherMs: 4,
                         elementsVisited: 40,
                         elementsReturned: 20,
                         partial: false,
-                        diff: true,
-                        contextBytes: 1024
+                        responseEncoding: .diff,
+                        textBytes: 1024,
+                        screenshotPNGBytes: 2048
                     ))))
         let recordedMetrics = metrics
         let result = try await healthReportImpl([:]) { _ in

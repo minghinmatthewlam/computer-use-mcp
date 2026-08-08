@@ -4,7 +4,7 @@ import Foundation
 import MCP
 
 let metricsMetaKey = "computer-use-mcp/metrics"
-private let metricsSchemaVersion = 1
+private let metricsSchemaVersion = 2
 
 /// Privacy-safe, daemon-wide operational metrics. This schema intentionally has
 /// no fields for accessibility labels/values, screenshots, tree text, typed
@@ -55,50 +55,172 @@ struct OperationMetric: Codable, Equatable, Sendable {
   }
 }
 
+enum StateResponseEncoding: String, Codable, CaseIterable, Sendable {
+  case none
+  case unchanged
+  case diff
+  case full
+}
+
 struct PerceptionMetric: Codable, Equatable, Sendable {
   let operation: String
   let tool: String
   let appBundleIdentifier: String?
-  let elapsedMs: Int64
+  let perceptionMs: Int64
+  let settleMs: Int64
+  let screenshotMs: Int64
+  let snapshotMs: Int64
+  let verificationMs: Int64
+  let responseConstructionMs: Int64
+  let otherMs: Int64
   let elementsVisited: Int
   let elementsReturned: Int
   let partial: Bool
-  let diff: Bool
-  let contextBytes: Int
+  let responseEncoding: StateResponseEncoding
+  let textBytes: Int
+  let screenshotPNGBytes: Int
 
   enum CodingKeys: String, CodingKey {
     case operation
     case tool
     case appBundleIdentifier = "app_bundle_identifier"
-    case elapsedMs = "elapsed_ms"
+    case perceptionMs = "perception_ms"
+    case settleMs = "settle_ms"
+    case screenshotMs = "screenshot_ms"
+    case snapshotMs = "snapshot_ms"
+    case verificationMs = "verification_ms"
+    case responseConstructionMs = "response_construction_ms"
+    case otherMs = "other_ms"
     case elementsVisited = "elements_visited"
     case elementsReturned = "elements_returned"
     case partial
-    case diff
-    case contextBytes = "context_bytes"
+    case responseEncoding = "response_encoding"
+    case textBytes = "text_bytes"
+    case screenshotPNGBytes = "screenshot_png_bytes"
   }
 
   init(
     operation: String,
     tool: String,
     appBundleIdentifier: String?,
-    elapsedMs: Int64,
+    perceptionMs: Int64,
+    settleMs: Int64,
+    screenshotMs: Int64,
+    snapshotMs: Int64,
+    verificationMs: Int64,
+    responseConstructionMs: Int64,
+    otherMs: Int64,
     elementsVisited: Int,
     elementsReturned: Int,
     partial: Bool,
-    diff: Bool,
-    contextBytes: Int
+    responseEncoding: StateResponseEncoding,
+    textBytes: Int,
+    screenshotPNGBytes: Int
   ) {
     self.operation = safeMetricDimension(operation)
     self.tool = safeMetricDimension(tool)
     self.appBundleIdentifier = appBundleIdentifier.map(safeMetricDimension)
-    self.elapsedMs = max(0, elapsedMs)
+    self.perceptionMs = max(0, perceptionMs)
+    self.settleMs = max(0, settleMs)
+    self.screenshotMs = max(0, screenshotMs)
+    self.snapshotMs = max(0, snapshotMs)
+    self.verificationMs = max(0, verificationMs)
+    self.responseConstructionMs = max(0, responseConstructionMs)
+    self.otherMs = max(0, otherMs)
     self.elementsVisited = max(0, elementsVisited)
     self.elementsReturned = max(0, elementsReturned)
     self.partial = partial
-    self.diff = diff
-    self.contextBytes = max(0, contextBytes)
+    self.responseEncoding = responseEncoding
+    self.textBytes = max(0, textBytes)
+    self.screenshotPNGBytes = max(0, screenshotPNGBytes)
   }
+
+  init?(value: Value) {
+    guard case .object(let fields) = value,
+      let operation = fields["operation"]?.stringValue,
+      let tool = fields["tool"]?.stringValue,
+      let perceptionMs = fields["perception_ms"]?.intValue,
+      let settleMs = fields["settle_ms"]?.intValue,
+      let screenshotMs = fields["screenshot_ms"]?.intValue,
+      let snapshotMs = fields["snapshot_ms"]?.intValue,
+      let verificationMs = fields["verification_ms"]?.intValue,
+      let responseConstructionMs = fields["response_construction_ms"]?.intValue,
+      let otherMs = fields["other_ms"]?.intValue,
+      let elementsVisited = fields["elements_visited"]?.intValue,
+      let elementsReturned = fields["elements_returned"]?.intValue,
+      let partial = fields["partial"]?.boolValue,
+      let rawEncoding = fields["response_encoding"]?.stringValue,
+      let responseEncoding = StateResponseEncoding(rawValue: rawEncoding),
+      let textBytes = fields["text_bytes"]?.intValue,
+      let screenshotPNGBytes = fields["screenshot_png_bytes"]?.intValue
+    else { return nil }
+    self.init(
+      operation: operation,
+      tool: tool,
+      appBundleIdentifier: fields["app_bundle_identifier"]?.stringValue,
+      perceptionMs: Int64(perceptionMs),
+      settleMs: Int64(settleMs),
+      screenshotMs: Int64(screenshotMs),
+      snapshotMs: Int64(snapshotMs),
+      verificationMs: Int64(verificationMs),
+      responseConstructionMs: Int64(responseConstructionMs),
+      otherMs: Int64(otherMs),
+      elementsVisited: elementsVisited,
+      elementsReturned: elementsReturned,
+      partial: partial,
+      responseEncoding: responseEncoding,
+      textBytes: textBytes,
+      screenshotPNGBytes: screenshotPNGBytes)
+  }
+
+  func addingResponseConstruction(milliseconds: Int64, textBytes: Int) -> PerceptionMetric {
+    PerceptionMetric(
+      operation: operation,
+      tool: tool,
+      appBundleIdentifier: appBundleIdentifier,
+      perceptionMs: perceptionMs + max(0, milliseconds),
+      settleMs: settleMs,
+      screenshotMs: screenshotMs,
+      snapshotMs: snapshotMs,
+      verificationMs: verificationMs,
+      responseConstructionMs: responseConstructionMs + max(0, milliseconds),
+      otherMs: otherMs,
+      elementsVisited: elementsVisited,
+      elementsReturned: elementsReturned,
+      partial: partial,
+      responseEncoding: responseEncoding,
+      textBytes: self.textBytes + max(0, textBytes),
+      screenshotPNGBytes: screenshotPNGBytes)
+  }
+
+  func replacingResponse(
+    encoding: StateResponseEncoding,
+    textBytes: Int,
+    screenshotPNGBytes: Int,
+    addedConstructionMs: Int64
+  ) -> PerceptionMetric {
+    PerceptionMetric(
+      operation: operation,
+      tool: tool,
+      appBundleIdentifier: appBundleIdentifier,
+      perceptionMs: perceptionMs + max(0, addedConstructionMs),
+      settleMs: settleMs,
+      screenshotMs: screenshotMs,
+      snapshotMs: snapshotMs,
+      verificationMs: verificationMs,
+      responseConstructionMs: responseConstructionMs + max(0, addedConstructionMs),
+      otherMs: otherMs,
+      elementsVisited: elementsVisited,
+      elementsReturned: encoding == .none ? 0 : elementsReturned,
+      partial: partial,
+      responseEncoding: encoding,
+      textBytes: textBytes,
+      screenshotPNGBytes: screenshotPNGBytes)
+  }
+}
+
+enum PerceptionMetricRecordingContext {
+  @TaskLocal static var deferred = false
 }
 
 extension OperationMetric {
@@ -128,12 +250,19 @@ extension PerceptionMetric {
     var fields: [String: Value] = [
       "operation": .string(operation),
       "tool": .string(tool),
-      "elapsed_ms": .int(Int(clamping: elapsedMs)),
+      "perception_ms": .int(Int(clamping: perceptionMs)),
+      "settle_ms": .int(Int(clamping: settleMs)),
+      "screenshot_ms": .int(Int(clamping: screenshotMs)),
+      "snapshot_ms": .int(Int(clamping: snapshotMs)),
+      "verification_ms": .int(Int(clamping: verificationMs)),
+      "response_construction_ms": .int(Int(clamping: responseConstructionMs)),
+      "other_ms": .int(Int(clamping: otherMs)),
       "elements_visited": .int(elementsVisited),
       "elements_returned": .int(elementsReturned),
       "partial": .bool(partial),
-      "diff": .bool(diff),
-      "context_bytes": .int(contextBytes),
+      "response_encoding": .string(responseEncoding.rawValue),
+      "text_bytes": .int(textBytes),
+      "screenshot_png_bytes": .int(screenshotPNGBytes),
     ]
     if let appBundleIdentifier {
       fields["app_bundle_identifier"] = .string(appBundleIdentifier)
@@ -164,6 +293,40 @@ extension CallTool.Result {
   }
 }
 
+func perceptionMetric(in result: CallTool.Result) -> PerceptionMetric? {
+  guard case .object(let envelope)? = result._meta?[metricsMetaKey],
+    let value = envelope["perception"]
+  else { return nil }
+  return PerceptionMetric(value: value)
+}
+
+func recordingDeferredPerceptionMetric(
+  from source: CallTool.Result,
+  attachingTo target: CallTool.Result? = nil,
+  addedTextBytes: Int = 0,
+  addedResponseConstructionMs: Int64 = 0,
+  replacingEncoding: StateResponseEncoding? = nil,
+  replacingTextBytes: Int? = nil,
+  replacingScreenshotPNGBytes: Int? = nil
+) async -> CallTool.Result {
+  let result = target ?? source
+  guard let metric = perceptionMetric(in: source) else { return result }
+  let adjusted: PerceptionMetric
+  if let replacingEncoding, let replacingTextBytes, let replacingScreenshotPNGBytes {
+    adjusted = metric.replacingResponse(
+      encoding: replacingEncoding,
+      textBytes: replacingTextBytes,
+      screenshotPNGBytes: replacingScreenshotPNGBytes,
+      addedConstructionMs: addedResponseConstructionMs)
+  } else {
+    adjusted = metric.addingResponseConstruction(
+      milliseconds: addedResponseConstructionMs,
+      textBytes: addedTextBytes)
+  }
+  await MetricsRecorder.shared.record(MetricsEvent(payload: .perception(adjusted)))
+  return result.withPerceptionMetric(adjusted)
+}
+
 private func safeMetricDimension(_ value: String) -> String {
   guard !value.isEmpty, value.utf8.count <= 128,
     value.unicodeScalars.allSatisfy({
@@ -186,7 +349,7 @@ struct MetricsEvent: Codable, Equatable, Sendable {
   let payload: MetricsEventPayload
 
   init(timestamp: Date = Date(), payload: MetricsEventPayload) {
-    schemaVersion = 1
+    schemaVersion = 2
     self.timestamp = timestamp
     self.payload = payload
   }
@@ -242,7 +405,7 @@ struct MetricCounter: Codable, Equatable, Sendable {
 }
 
 struct MetricsAggregateSnapshot: Codable, Equatable, Sendable {
-  var schemaVersion = 1
+  var schemaVersion = 2
   var updatedAt: Date
   var events = 0
   var operations = 0
@@ -256,11 +419,18 @@ struct MetricsAggregateSnapshot: Codable, Equatable, Sendable {
   var queueLatencyMs = MetricCounter()
   var executionLatencyMs = MetricCounter()
   var perceptionLatencyMs = MetricCounter()
+  var settleLatencyMs = MetricCounter()
+  var screenshotLatencyMs = MetricCounter()
+  var snapshotLatencyMs = MetricCounter()
+  var verificationLatencyMs = MetricCounter()
+  var responseConstructionLatencyMs = MetricCounter()
+  var otherLatencyMs = MetricCounter()
   var elementsVisited = MetricCounter()
   var elementsReturned = MetricCounter()
   var partialPerceptions = 0
-  var diffPerceptions = 0
-  var contextBytes = MetricCounter()
+  var responseEncodings: [String: Int] = [:]
+  var textBytes = MetricCounter()
+  var screenshotPNGBytes = MetricCounter()
 
   enum CodingKeys: String, CodingKey {
     case schemaVersion = "schema_version"
@@ -277,11 +447,18 @@ struct MetricsAggregateSnapshot: Codable, Equatable, Sendable {
     case queueLatencyMs = "queue_latency_ms"
     case executionLatencyMs = "execution_latency_ms"
     case perceptionLatencyMs = "perception_latency_ms"
+    case settleLatencyMs = "settle_latency_ms"
+    case screenshotLatencyMs = "screenshot_latency_ms"
+    case snapshotLatencyMs = "snapshot_latency_ms"
+    case verificationLatencyMs = "verification_latency_ms"
+    case responseConstructionLatencyMs = "response_construction_latency_ms"
+    case otherLatencyMs = "other_latency_ms"
     case elementsVisited = "elements_visited"
     case elementsReturned = "elements_returned"
     case partialPerceptions = "partial_perceptions"
-    case diffPerceptions = "diff_perceptions"
-    case contextBytes = "context_bytes"
+    case responseEncodings = "response_encodings"
+    case textBytes = "text_bytes"
+    case screenshotPNGBytes = "screenshot_png_bytes"
   }
 
   init(updatedAt: Date = Date()) {
@@ -308,12 +485,19 @@ struct MetricsAggregateSnapshot: Codable, Equatable, Sendable {
       perceptions += 1
       increment(metric.tool, in: &tools)
       metric.appBundleIdentifier.map { increment($0, in: &appBundleIdentifiers) }
-      perceptionLatencyMs.record(clampedInt(metric.elapsedMs))
+      perceptionLatencyMs.record(clampedInt(metric.perceptionMs))
+      settleLatencyMs.record(clampedInt(metric.settleMs))
+      screenshotLatencyMs.record(clampedInt(metric.screenshotMs))
+      snapshotLatencyMs.record(clampedInt(metric.snapshotMs))
+      verificationLatencyMs.record(clampedInt(metric.verificationMs))
+      responseConstructionLatencyMs.record(clampedInt(metric.responseConstructionMs))
+      otherLatencyMs.record(clampedInt(metric.otherMs))
       elementsVisited.record(max(0, metric.elementsVisited))
       elementsReturned.record(max(0, metric.elementsReturned))
       partialPerceptions += metric.partial ? 1 : 0
-      diffPerceptions += metric.diff ? 1 : 0
-      contextBytes.record(max(0, metric.contextBytes))
+      increment(metric.responseEncoding.rawValue, in: &responseEncodings)
+      textBytes.record(max(0, metric.textBytes))
+      screenshotPNGBytes.record(max(0, metric.screenshotPNGBytes))
     }
   }
 }

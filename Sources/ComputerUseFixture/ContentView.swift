@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @State private var fixtureState = BasicControlsFixtureState.initial
     private let stateStore = BasicControlsFixtureStateStore()
+    private let showsStressPanels =
+        ProcessInfo.processInfo.environment["COMPUTER_USE_FIXTURE_SMALL_TREE"] != "1"
 
     var body: some View {
         ScrollView([.vertical, .horizontal]) {
@@ -17,10 +19,12 @@ struct ContentView: View {
                     keystrokeCard
                 }
 
-                HStack(alignment: .top, spacing: 16) {
-                    RowListPane()
-                    ScrollProbePane()
-                    webCard
+                if showsStressPanels {
+                    HStack(alignment: .top, spacing: 16) {
+                        RowListPane()
+                        ScrollProbePane()
+                        webCard
+                    }
                 }
             }
             .padding(20)

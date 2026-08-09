@@ -80,4 +80,24 @@ import Testing
             total: 2, settle: 4, screenshot: 3, snapshot: 5,
             verification: 2, responseConstruction: 1) == 0)
     }
+
+    @Test func scopedOutcomeReportsOnlyVerificationEvidence() {
+        var verification = ActionVerification()
+        verification.beforeSelected = false
+        verification.afterSelected = true
+        verification.beforeFocused = false
+        verification.afterFocused = false
+        verification.renderedTextChanged = true
+        let outcome = ActionOutcome.success("The checkbox reached the requested state.", verification)
+
+        let text = scopedActionResponseText(
+            note: "Clicked the checkbox.", outcome: outcome, snapshotGeneration: "7")
+
+        #expect(text.contains("Outcome: success"))
+        #expect(text.contains("Selection: false -> true"))
+        #expect(text.contains("UI tree changed: true"))
+        #expect(text.contains("generation 7"))
+        #expect(!text.contains("Elements:"))
+        #expect(!text.contains("AXCheckBox"))
+    }
 }

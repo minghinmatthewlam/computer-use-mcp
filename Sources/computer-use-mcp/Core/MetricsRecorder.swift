@@ -60,6 +60,7 @@ enum StateResponseEncoding: String, Codable, CaseIterable, Sendable {
   case unchanged
   case diff
   case full
+  case outcome
 }
 
 struct PerceptionMetric: Codable, Equatable, Sendable {

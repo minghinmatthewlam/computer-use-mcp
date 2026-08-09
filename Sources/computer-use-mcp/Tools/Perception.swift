@@ -186,6 +186,34 @@ func selectedStateResponseEncoding(
     return hasCompactDiff ? .diff : .full
 }
 
+func scopedActionResponseText(
+    note: String?, outcome: ActionOutcome, snapshotGeneration: String
+) -> String {
+    var lines: [String] = []
+    if let note, !note.isEmpty { lines.append(note) }
+    lines.append("Outcome: \(outcome.classification.rawValue). \(outcome.summary)")
+
+    if let verification = outcome.verification {
+        if let before = verification.beforeSelected, let after = verification.afterSelected {
+            lines.append("Selection: \(before) -> \(after)")
+        }
+        if verification.beforeValuePreview != nil || verification.afterValuePreview != nil {
+            lines.append("Target value changed: \(verification.beforeValuePreview != verification.afterValuePreview)")
+        }
+        if let before = verification.beforeFocused, let after = verification.afterFocused {
+            lines.append("Focused: \(before) -> \(after)")
+        }
+        if let changed = verification.renderedTextChanged {
+            lines.append("UI tree changed: \(changed)")
+        }
+    }
+
+    lines.append(
+        "UI state was refreshed internally for verification (generation \(snapshotGeneration)). "
+            + "Surviving element ids remain valid; call get_app_state if you need a new target.")
+    return lines.joined(separator: "\n")
+}
+
 func perceptionDurationMilliseconds(_ duration: Duration) -> Int64 {
     max(
         0,
@@ -423,39 +451,45 @@ func stateResult(
         }
     }
 
+    let requestedResponseMode = responseMode ?? StateResponseContext.mode
+    let usesScopedOutcomeResponse = verifier != nil && requestedResponseMode == .auto
     var responseStart = ContinuousClock.now
     var text = ""
-    if let note {
-        text += note + "\n\n"
-    }
-    if let windowNote {
-        text += windowNote + "\n\n"
-    }
-    text += "App: \(app.name) (\(app.bundleIdentifier), pid \(app.pid))\n"
-    text += "Window: \"\(window.title ?? "untitled")\""
-    if let capture {
-        text += " — screenshot \(capture.pixelWidth)x\(capture.pixelHeight) px"
-        text += " (element boxes and x/y coordinates are in these pixels)"
-    } else if detail == .none {
-        text += " — screenshot omitted (element boxes stay in the previous screenshot's pixel scale)"
-    }
-    text += "\n"
-    if let captureNote {
-        text += captureNote + "\n"
-    }
-    if webContentNotMaterialized {
-        text += webContentNotMaterializedNote() + "\n"
+    if !usesScopedOutcomeResponse {
+        if let note {
+            text += note + "\n\n"
+        }
+        if let windowNote {
+            text += windowNote + "\n\n"
+        }
+        text += "App: \(app.name) (\(app.bundleIdentifier), pid \(app.pid))\n"
+        text += "Window: \"\(window.title ?? "untitled")\""
+        if let capture {
+            text += " — screenshot \(capture.pixelWidth)x\(capture.pixelHeight) px"
+            text += " (element boxes and x/y coordinates are in these pixels)"
+        } else if detail == .none {
+            text += " — screenshot omitted (element boxes stay in the previous screenshot's pixel scale)"
+        }
+        text += "\n"
+        if let captureNote {
+            text += captureNote + "\n"
+        }
+        if webContentNotMaterialized {
+            text += webContentNotMaterializedNote() + "\n"
+        }
     }
     // Action results skip resending a tree the agent already has; explicit
     // perception (get_app_state, .full) always returns it. A changed tree
     // whose diff is compact is sent as the diff — surviving elements carried
     // their ids over, so everything the agent holds stays valid.
-    let responseEncoding = selectedStateResponseEncoding(
+    var responseEncoding = selectedStateResponseEncoding(
         unchanged: unchanged,
         hasCompactDiff: diff?.isCompact == true,
         detail: detail,
-        mode: responseMode ?? StateResponseContext.mode)
-    if responseEncoding == .unchanged {
+        mode: requestedResponseMode)
+    if usesScopedOutcomeResponse {
+        responseEncoding = .outcome
+    } else if responseEncoding == .unchanged {
         text +=
             "UI tree unchanged by this action: element ids from generation "
             + "\(snapshot.generation) remain valid, reuse them."
@@ -510,7 +544,10 @@ func stateResult(
         verificationMs += perceptionDurationMilliseconds(verificationStart.duration(to: .now))
     }
     let responseFinalizeStart = ContinuousClock.now
-    if let sentence = actionOutcome?.humanSentence {
+    if usesScopedOutcomeResponse, let actionOutcome {
+        text = scopedActionResponseText(
+            note: note, outcome: actionOutcome, snapshotGeneration: snapshot.generation)
+    } else if let sentence = actionOutcome?.humanSentence {
         // A verified non-success verdict, in plain language for the transcript.
         text += "\n\n" + sentence
     } else if actionOutcome == nil, unchanged,
@@ -546,7 +583,7 @@ func stateResult(
         verificationMs: verificationMs,
         responseConstructionMs: responseConstructionMs,
         elementsVisited: tree.elementsVisited,
-        elementsReturned: tree.elements.count,
+        elementsReturned: responseEncoding == .outcome ? 0 : tree.elements.count,
         partial: tree.isPartial,
         responseEncoding: responseEncoding,
         textBytes: text.utf8.count,

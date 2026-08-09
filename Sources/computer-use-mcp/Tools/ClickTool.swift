@@ -22,7 +22,15 @@ func clickImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     let target = try await resolvePointTarget(args, app: app, allowGlobalCursor: allowGlobalCursor)
     try SafetyPolicy.checkClick(label: clickTargetLabel(target), app: app, confirmed: confirmed)
 
-    let intent = clickIntent(target, button: buttonName)
+    // Capture target-local state before deriving intent so a single checkbox
+    // click can declare and verify the exact state transition it should cause.
+    let before = ActionVerifier.captureBefore(
+        target.element, family: .click, snapshotElement: target.snapshotElement)
+    let intent = clickIntent(
+        role: target.snapshotElement?.role,
+        button: buttonName,
+        clickCount: clickCount,
+        beforeSelected: before.beforeSelected)
 
     // Read-act-read, pre-dispatch: a disabled control cannot perform the action.
     // Classify it `unsupported` and do not press a dead control — distinct from
@@ -33,6 +41,7 @@ func clickImpl(_ args: [String: Value]) async throws -> CallTool.Result {
         let verifier = ActionVerifier(
             family: .click, intent: intent, deliveryTier: InputTier.accessibilityAction.rawValue,
             dispatchSucceeded: false, hasTargetElement: true, snapshotElement: target.snapshotElement,
+            before: before,
             resolved: .unsupported(.unsupported, "\(target.description) is disabled and cannot be clicked."))
         return try await stateResult(
             app: app, windowTitle: target.snapshot.windowTitle,
@@ -42,10 +51,6 @@ func clickImpl(_ args: [String: Value]) async throws -> CallTool.Result {
             focusTelemetry: focus.finish(deliveryTier: InputTier.accessibilityAction.rawValue),
             verifier: verifier)
     }
-
-    // Read (before): capture the target's fields before dispatch.
-    let before = ActionVerifier.captureBefore(
-        target.element, family: .click, snapshotElement: target.snapshotElement)
 
     let outcome: InputActionOutcome
     switch buttonName {
@@ -85,12 +90,17 @@ func clickImpl(_ args: [String: Value]) async throws -> CallTool.Result {
     )
 }
 
-/// The intended effect of a click, for the outcome verifier. A left click on a
-/// text-entry field is a focus/caret placement (its effect is often invisible);
-/// everything else is a generic activation whose effect is an observed change.
-private func clickIntent(_ target: PointTarget, button: String) -> ActionIntent {
-    guard button == "left" else { return .activate }
-    if let role = target.snapshotElement?.role, isTextEntryRole(role) { return .focusTarget }
+/// The intended effect of a click, for the outcome verifier. A single left click
+/// focuses text fields and toggles checkboxes with known state. Other clicks are
+/// generic activations whose effect is an observed change.
+func clickIntent(
+    role: String?, button: String, clickCount: Int, beforeSelected: Bool?
+) -> ActionIntent {
+    guard button == "left", clickCount == 1 else { return .activate }
+    if let role, isTextEntryRole(role) { return .focusTarget }
+    if role == "AXCheckBox", let beforeSelected {
+        return .toggle(!beforeSelected)
+    }
     return .activate
 }
 

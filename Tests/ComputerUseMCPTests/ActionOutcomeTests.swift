@@ -24,6 +24,36 @@ import Testing
 
     // MARK: click
 
+    @Test func clickIntentDerivesCheckboxTransition() {
+        #expect(clickIntent(
+            role: "AXCheckBox", button: "left", clickCount: 1,
+            beforeSelected: false) == .toggle(true))
+        #expect(clickIntent(
+            role: "AXCheckBox", button: "left", clickCount: 1,
+            beforeSelected: true) == .toggle(false))
+    }
+
+    @Test func clickIntentDoesNotGuessWhenCheckboxStateIsUnknown() {
+        #expect(clickIntent(
+            role: "AXCheckBox", button: "left", clickCount: 1,
+            beforeSelected: nil) == .activate)
+        #expect(clickIntent(
+            role: "AXCheckBox", button: "left", clickCount: 2,
+            beforeSelected: false) == .activate)
+    }
+
+    @Test func clickIntentPreservesFocusAndGenericActivation() {
+        #expect(clickIntent(
+            role: "AXTextArea", button: "left", clickCount: 1,
+            beforeSelected: nil) == .focusTarget)
+        #expect(clickIntent(
+            role: "AXButton", button: "left", clickCount: 1,
+            beforeSelected: nil) == .activate)
+        #expect(clickIntent(
+            role: "AXCheckBox", button: "right", clickCount: 1,
+            beforeSelected: false) == .activate)
+    }
+
     @Test func genericActivationWindowChangeDoesNotClaimBusinessEffect() {
         var v = ActionVerification()
         v.renderedTextChanged = true
